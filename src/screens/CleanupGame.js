@@ -21,23 +21,55 @@ const BOAT = {
 
 // Kova pozisyonları (kayığın içinde - ekran koordinatlarında)
 const BINS = {
+  battery: {
+    type: "battery",
+    label: "PİL",
+    x: SCREEN_WIDTH * 0.02,
+    y: SCREEN_HEIGHT * 0.82,
+    width: 60,
+    height: 70,
+    color: "#DC2626",
+    emoji: "🔋",
+  },
+  paper: {
+    type: "paper",
+    label: "KAĞIT",
+    x: SCREEN_WIDTH * 0.21,
+    y: SCREEN_HEIGHT * 0.82,
+    width: 60,
+    height: 70,
+    color: "#2563EB",
+    emoji: "📄",
+  },
   glass: {
     type: "glass",
     label: "CAM",
-    x: SCREEN_WIDTH * 0.15,
-    y: SCREEN_HEIGHT * 0.78,
-    width: SCREEN_WIDTH * 0.3,
-    height: SCREEN_HEIGHT * 0.15,
+    x: SCREEN_WIDTH * 0.40,
+    y: SCREEN_HEIGHT * 0.82,
+    width: 60,
+    height: 70,
     color: "#10B981",
+    emoji: "🍾",
   },
   plastic: {
     type: "plastic",
     label: "PLASTİK",
-    x: SCREEN_WIDTH * 0.55,
-    y: SCREEN_HEIGHT * 0.78,
-    width: SCREEN_WIDTH * 0.3,
-    height: SCREEN_HEIGHT * 0.15,
-    color: "#3B82F6",
+    x: SCREEN_WIDTH * 0.59,
+    y: SCREEN_HEIGHT * 0.82,
+    width: 60,
+    height: 70,
+    color: "#F59E0B",
+    emoji: "♻️",
+  },
+  general: {
+    type: "general",
+    label: "EVSEL",
+    x: SCREEN_WIDTH * 0.78,
+    y: SCREEN_HEIGHT * 0.82,
+    width: 60,
+    height: 70,
+    color: "#6B7280",
+    emoji: "🗑️",
   },
 };
 
@@ -59,21 +91,27 @@ const createWave = (offsetY = 0) => ({
 });
 
 // Çöp oluşturma (ekranın üstünden spawn olur, aşağı kayar)
-const spawnTrash = () => ({
-  id: `trash-${Math.random().toString(36).slice(2)}`,
-  type: Math.random() > 0.5 ? "glass" : "plastic",
-  x: rand(SCREEN_WIDTH * 0.15, SCREEN_WIDTH * 0.85),
-  y: -80,  // Ekranın üstünden başlar
-  rotation: rand(0, 360),
-  bobPhase: rand(0, Math.PI * 2),
-  dragging: false,   // Sürükleniyor mu?
-  startX: 0,         // Sürükleme başlangıç pozisyonu
-  startY: 0,
-  touchStartX: 0,    // Dokunma başlangıç noktası
-  touchStartY: 0,
-  inBoat: false,
-  targetBin: null,
-});
+const spawnTrash = () => {
+  const types = ["battery", "paper", "glass", "plastic", "general"];
+  const selectedType = types[Math.floor(Math.random() * types.length)];
+  
+  return {
+    id: `trash-${Math.random().toString(36).slice(2)}`,
+    type: selectedType,
+    x: rand(SCREEN_WIDTH * 0.15, SCREEN_WIDTH * 0.85),
+    y: -80,  // Ekranın üstünden başlar
+    rotation: rand(0, 360),
+    bobPhase: rand(0, Math.PI * 2),
+    dragging: false,   // Sürükleniyor mu?
+    startX: 0,         // Sürükleme başlangıç pozisyonu
+    startY: 0,
+    offsetX: 0,        // Dokunma noktası ile obje merkezi arası fark
+    offsetY: 0,
+    inBoat: false,
+    targetBin: null,
+    spinSpeed: 0,      // Dönerken hız
+  };
+};
 
 // Köpekbalığı oluşturma (yukarıdan aşağıya kayar)
 const spawnShark = () => ({
@@ -110,6 +148,8 @@ export default function CleanupGame({ onExit }) {
   const sharkSpawnTimerRef = useRef(3);
   const rafRef = useRef(null);
   const lastFrameRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const mouseStartRef = useRef({ x: 0, y: 0 });
 
   // Oyunu sıfırlama
   const resetGame = useCallback(() => {
@@ -135,6 +175,88 @@ export default function CleanupGame({ onExit }) {
     setPhase("TUTORIAL");
   }, [resetGame]);
 
+  // Global mouse olayları (web için)
+  useEffect(() => {
+    const handleGlobalMouseMove = (e) => {
+      if (!isDraggingRef.current || !draggingTrashRef.current) return;
+      e.preventDefault();
+      const item = draggingTrashRef.current;
+      const currentX = e.clientX || e.pageX;
+      const currentY = e.clientY || e.pageY;
+      const dx = currentX - mouseStartRef.current.x;
+      const dy = currentY - mouseStartRef.current.y;
+      item.x = item.startX + dx;
+      item.y = item.startY + dy;
+      setTick((prev) => (prev + 1) % 1000);
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (!isDraggingRef.current || !draggingTrashRef.current) return;
+      const item = draggingTrashRef.current;
+      if (!item.dragging) return;
+      
+      // Çöp bırakma işlemi
+      item.dragging = false;
+      isDraggingRef.current = false;
+      draggingTrashRef.current = null;
+      
+      // Çarpışma kontrolü
+      const trashCenterX = item.x;
+      const trashCenterY = item.y;
+      
+      console.log('Trash dropped at:', trashCenterX, trashCenterY, 'Type:', item.type);
+      
+      let hitBin = null;
+      Object.values(BINS).forEach((bin) => {
+        const margin = 40; // Daha geniş tolerans
+        const hit = trashCenterX >= bin.x - margin && 
+            trashCenterX <= bin.x + bin.width + margin &&
+            trashCenterY >= bin.y - margin && 
+            trashCenterY <= bin.y + bin.height + margin;
+        
+        console.log('Checking bin:', bin.label, 'at', bin.x, bin.y, 'Hit:', hit);
+        
+        if (hit) {
+          hitBin = bin;
+        }
+      });
+      
+      if (hitBin) {
+        console.log('Hit bin:', hitBin.label, 'Correct:', hitBin.type === item.type);
+      }
+      
+      if (hitBin && hitBin.type === item.type && phase === "RUNNING") {
+        item.inBoat = true;
+        item.targetBin = hitBin;
+        item.spinSpeed = rand(720, 1080);
+        
+        const multiplier = COMBOS[comboIndexRef.current];
+        const gained = 10 * multiplier;
+        scoreRef.current += gained;
+        comboIndexRef.current = Math.min(comboIndexRef.current + 1, COMBOS.length - 1);
+        
+        setScoreState(Math.round(scoreRef.current));
+        setComboState(`x${multiplier.toFixed(1)}`);
+        
+        setTimeout(() => {
+          trashRef.current = trashRef.current.filter((t) => t.id !== item.id);
+        }, 400);
+      } else if (hitBin) {
+        comboIndexRef.current = 0;
+        setComboState("x1.0");
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mousemove', handleGlobalMouseMove);
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleGlobalMouseMove);
+        window.removeEventListener('mouseup', handleGlobalMouseUp);
+      };
+    }
+  }, [phase]);
+
   // Skor güncelleme (doğru/yanlış sayısına göre combo artır/sıfırla)
   const updateScore = useCallback((correct, wrong) => {
     if (wrong > 0) {
@@ -156,26 +278,39 @@ export default function CleanupGame({ onExit }) {
     
     trash.dragging = false;
     draggingTrashRef.current = null;
+    isDraggingRef.current = false;
     
     // Çöpün merkez noktasını kullanarak çarpışma kontrolü yap
     const trashCenterX = trash.x;
     const trashCenterY = trash.y;
     
-    // Daha geniş çarpışma alanı - merkez noktası kova içindeyse kabul et
-    const glassHit = trashCenterX >= BINS.glass.x && 
-                     trashCenterX <= BINS.glass.x + BINS.glass.width &&
-                     trashCenterY >= BINS.glass.y && 
-                     trashCenterY <= BINS.glass.y + BINS.glass.height;
-                     
-    const plasticHit = trashCenterX >= BINS.plastic.x && 
-                       trashCenterX <= BINS.plastic.x + BINS.plastic.width &&
-                       trashCenterY >= BINS.plastic.y && 
-                       trashCenterY <= BINS.plastic.y + BINS.plastic.height;
+    console.log('Touch release - Trash at:', trashCenterX, trashCenterY, 'Type:', trash.type);
     
-    if ((glassHit && trash.type === "glass") || (plasticHit && trash.type === "plastic")) {
+    // Tüm kutuları kontrol et - daha geniş çarpışma alanı
+    let hitBin = null;
+    Object.values(BINS).forEach((bin) => {
+      const margin = 40;
+      const hit = trashCenterX >= bin.x - margin && 
+          trashCenterX <= bin.x + bin.width + margin &&
+          trashCenterY >= bin.y - margin && 
+          trashCenterY <= bin.y + bin.height + margin;
+      
+      console.log('Touch - Checking bin:', bin.label, 'at', bin.x, bin.y, 'Hit:', hit);
+      
+      if (hit) {
+        hitBin = bin;
+      }
+    });
+    
+    if (hitBin) {
+      console.log('Touch - Hit bin:', hitBin.label, 'Correct:', hitBin.type === trash.type);
+    }
+    
+    if (hitBin && hitBin.type === trash.type) {
       // Doğru kovaya atıldı
       trash.inBoat = true;
-      trash.targetBin = trash.type === "glass" ? BINS.glass : BINS.plastic;
+      trash.targetBin = hitBin;
+      trash.spinSpeed = rand(720, 1080); // Hızlı dönme
       
       const multiplier = COMBOS[comboIndexRef.current];
       const gained = 10 * multiplier;
@@ -187,8 +322,8 @@ export default function CleanupGame({ onExit }) {
       
       setTimeout(() => {
         trashRef.current = trashRef.current.filter((t) => t.id !== trash.id);
-      }, 300);
-    } else if (glassHit || plasticHit) {
+      }, 400);
+    } else if (hitBin) {
       // Yanlış kovaya atıldı - combo sıfırla
       comboIndexRef.current = 0;
       setComboState("x1.0");
@@ -230,17 +365,18 @@ export default function CleanupGame({ onExit }) {
   const updateTrash = useCallback((delta) => {
     trashRef.current.forEach((item) => {
       if (item.inBoat && item.targetBin) {
-        // Kovaya doğru animasyon
-        const dx = item.targetBin.x - item.x;
-        const dy = item.targetBin.y - item.y;
-        item.x += dx * delta * 8;
-        item.y += dy * delta * 8;
-        item.rotation += 360 * delta * 2;
+        // Kovaya doğru animasyon - dönerek gir
+        const dx = item.targetBin.x + item.targetBin.width / 2 - item.x;
+        const dy = item.targetBin.y + item.targetBin.height / 2 - item.y;
+        item.x += dx * delta * 10;
+        item.y += dy * delta * 10;
+        item.rotation += item.spinSpeed * delta;
         return;
       }
       
       if (item.dragging) {
-        // Sürüklenirken hareket etme
+        // Sürüklenirken hafif dönme
+        item.rotation += 180 * delta;
         return;
       }
       
@@ -424,26 +560,52 @@ export default function CleanupGame({ onExit }) {
 
         {/* Çöpler (yukarıdan aşağıya kayıyor - sürüklenebilir) */}
         {trashSnapshot.map((item) => {
+          // Atık tipine göre emoji ve renk
+          const trashIcons = {
+            battery: { emoji: "🔋", color: "#DC2626", border: "#991B1B" },
+            paper: { emoji: "📄", color: "#2563EB", border: "#1E40AF" },
+            glass: { emoji: "🍾", color: "#10B981", border: "#065F46" },
+            plastic: { emoji: "♻️", color: "#F59E0B", border: "#D97706" },
+            general: { emoji: "🗑️", color: "#6B7280", border: "#374151" },
+          };
+          
+          const icon = trashIcons[item.type];
+          
+          const handleMouseDown = (e) => {
+            if (phase !== "RUNNING" || item.inBoat) return;
+            e.preventDefault();
+            e.stopPropagation();
+            item.dragging = true;
+            item.startX = item.x;
+            item.startY = item.y;
+            mouseStartRef.current = { x: e.clientX || e.pageX, y: e.clientY || e.pageY };
+            draggingTrashRef.current = item;
+            isDraggingRef.current = true;
+          };
+          
           return (
             <View
               key={item.id}
               onStartShouldSetResponder={() => phase === "RUNNING" && !item.inBoat}
+              onMoveShouldSetResponder={() => phase === "RUNNING" && item.dragging}
               onResponderGrant={(evt) => {
                 if (phase === "RUNNING" && !item.inBoat) {
                   item.dragging = true;
                   item.startX = item.x;
                   item.startY = item.y;
-                  item.touchStartX = evt.nativeEvent.pageX;
-                  item.touchStartY = evt.nativeEvent.pageY;
+                  mouseStartRef.current = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
                   draggingTrashRef.current = item;
+                  isDraggingRef.current = true;
                 }
               }}
               onResponderMove={(evt) => {
-                if (phase === "RUNNING" && item.dragging) {
-                  const dx = evt.nativeEvent.pageX - item.touchStartX;
-                  const dy = evt.nativeEvent.pageY - item.touchStartY;
+                if (phase === "RUNNING" && item.dragging && draggingTrashRef.current?.id === item.id) {
+                  const touch = evt.nativeEvent;
+                  const dx = touch.pageX - mouseStartRef.current.x;
+                  const dy = touch.pageY - mouseStartRef.current.y;
                   item.x = item.startX + dx;
                   item.y = item.startY + dy;
+                  setTick((prev) => (prev + 1) % 1000);
                 }
               }}
               onResponderRelease={() => {
@@ -454,37 +616,28 @@ export default function CleanupGame({ onExit }) {
               style={[
                 styles.trash,
                 {
-                  left: item.x - 30,
+                  left: item.x - 35,
                   top: item.y - 40,
                   transform: [{ rotate: `${item.rotation}deg` }],
-                  opacity: item.dragging ? 0.8 : item.inBoat ? 0.6 : 1,
+                  opacity: item.dragging ? 0.9 : item.inBoat ? 0.5 : 1,
                   zIndex: item.inBoat ? 100 : item.dragging ? 50 : 10,
+                  cursor: 'pointer',
                 },
               ]}
+              // @ts-ignore - Web için mouse olayları
+              onMouseDown={handleMouseDown}
             >
-              {/* Şişe görünümü */}
+              {/* Atık görseli */}
               <View
                 style={[
-                  styles.bottle,
+                  styles.trashItem,
                   {
-                    backgroundColor: item.type === "glass" ? "#10B981" : "#3B82F6",
-                    borderColor: item.type === "glass" ? "#065F46" : "#1E3A8A",
+                    backgroundColor: icon.color,
+                    borderColor: icon.border,
                   },
                 ]}
               >
-                {/* Şişe kapağı */}
-                <View
-                  style={[
-                    styles.bottleCap,
-                    {
-                      backgroundColor: item.type === "glass" ? "#047857" : "#1E40AF",
-                    },
-                  ]}
-                />
-                {/* Şişe etiketi */}
-                <View style={styles.bottleLabel}>
-                  <Text style={styles.bottleLabelText}>{item.type === "glass" ? "CAM" : "PET"}</Text>
-                </View>
+                <Text style={styles.trashEmoji}>{icon.emoji}</Text>
               </View>
             </View>
           );
@@ -503,14 +656,12 @@ export default function CleanupGame({ onExit }) {
             
             {/* Kovalar (kayığın içinde) */}
             <View style={styles.binsContainer}>
-              <View style={[styles.bin, { backgroundColor: BINS.glass.color }]}>
-                <Text style={styles.binIcon}>♻️</Text>
-                <Text style={styles.binLabel}>CAM</Text>
-              </View>
-              <View style={[styles.bin, { backgroundColor: BINS.plastic.color }]}>
-                <Text style={styles.binIcon}>♻️</Text>
-                <Text style={styles.binLabel}>PLASTİK</Text>
-              </View>
+              {Object.values(BINS).map((bin) => (
+                <View key={bin.type} style={[styles.bin, { backgroundColor: bin.color }]}>
+                  <Text style={styles.binIcon}>{bin.emoji}</Text>
+                  <Text style={styles.binLabel}>{bin.label}</Text>
+                </View>
+              ))}
             </View>
           </View>
         </View>
@@ -540,10 +691,10 @@ export default function CleanupGame({ onExit }) {
                 <Text style={styles.overlayTitle}>🚣 Nasıl Oynanır?</Text>
                 <Text style={styles.overlayText}>Kayıkla suda gidiyorsun!</Text>
                 <Text style={styles.overlayText}>🌊 Su akıyor, dalgalar geliyor</Text>
-                <Text style={styles.overlayText}>� ŞİŞELERİ PARMAĞINLA SÜRÜKLE!</Text>
-                <Text style={styles.overlayText}>♻️ Cam → Sol (yeşil), Plastik → Sağ (mavi)</Text>
+                <Text style={styles.overlayText}>👆 ATIKLARI PARMAĞINLA SÜRÜKLE!</Text>
+                <Text style={styles.overlayText}>♻️ Doğru kutuya at: Pil🔋 Kağıt📄 Cam🍾 Plastik♻️ Evsel🗑️</Text>
                 <Text style={styles.overlayText}>🦈 KÖPEKBALIĞIna TIKLA yoksa can gider! (❤️ -1)</Text>
-                <Text style={styles.overlayText}>⚠️ Şişeleri kaçırırsan combo sıfırlanır!</Text>
+                <Text style={styles.overlayText}>⚠️ Atıkları kaçırırsan combo sıfırlanır!</Text>
               </>
             )}
             {phase === "PAUSED" && (
@@ -633,8 +784,8 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: "#78350F",
-    borderTopLeftRadius: SCREEN_WIDTH * 0.3,
-    borderTopRightRadius: SCREEN_WIDTH * 0.3,
+    borderTopLeftRadius: SCREEN_WIDTH * 0.25,
+    borderTopRightRadius: SCREEN_WIDTH * 0.25,
     position: "relative",
     shadowColor: "#000",
     shadowOpacity: 0.5,
@@ -676,15 +827,30 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     justifyContent: "space-around",
-    paddingHorizontal: 60,
+    paddingHorizontal: 10,
   },
   trash: {
     position: "absolute",
-    width: 60,
+    width: 70,
     height: 80,
     justifyContent: "center",
     alignItems: "center",
     zIndex: 10,
+  },
+  trashItem: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 3,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  trashEmoji: {
+    fontSize: 32,
   },
   bottle: {
     width: 32,
@@ -729,30 +895,32 @@ const styles = StyleSheet.create({
     fontSize: 50,
   },
   bin: {
-    width: 90,
-    height: 80,
-    borderRadius: 18,
+    width: 60,
+    height: 70,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.4)",
+    borderColor: "rgba(0,0,0,0.3)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 12,
+    // 3D perspektif efekti
+    transform: [{ perspective: 1000 }, { rotateX: "5deg" }],
   },
   binIcon: {
-    fontSize: 30,
-    marginBottom: 2,
+    fontSize: 24,
+    marginBottom: 1,
   },
   binLabel: {
     fontWeight: "800",
     color: "#FFFFFF",
-    fontSize: 14,
-    textShadowColor: "rgba(0,0,0,0.6)",
+    fontSize: 9,
+    textShadowColor: "rgba(0,0,0,0.8)",
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 4,
+    textShadowRadius: 3,
   },
   bottomBar: {
     flexDirection: "row",

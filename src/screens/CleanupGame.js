@@ -24,50 +24,50 @@ const BINS = {
   battery: {
     type: "battery",
     label: "PİL",
-    x: SCREEN_WIDTH * 0.02,
-    y: SCREEN_HEIGHT * 0.82,
-    width: 60,
-    height: 70,
+    x: 20,
+    y: SCREEN_HEIGHT * 0.80,
+    width: 70,
+    height: 80,
     color: "#DC2626",
     emoji: "🔋",
   },
   paper: {
     type: "paper",
     label: "KAĞIT",
-    x: SCREEN_WIDTH * 0.21,
-    y: SCREEN_HEIGHT * 0.82,
-    width: 60,
-    height: 70,
+    x: SCREEN_WIDTH * 0.22,
+    y: SCREEN_HEIGHT * 0.80,
+    width: 70,
+    height: 80,
     color: "#2563EB",
     emoji: "📄",
   },
   glass: {
     type: "glass",
     label: "CAM",
-    x: SCREEN_WIDTH * 0.40,
-    y: SCREEN_HEIGHT * 0.82,
-    width: 60,
-    height: 70,
+    x: SCREEN_WIDTH * 0.41,
+    y: SCREEN_HEIGHT * 0.80,
+    width: 70,
+    height: 80,
     color: "#10B981",
     emoji: "🍾",
   },
   plastic: {
     type: "plastic",
     label: "PLASTİK",
-    x: SCREEN_WIDTH * 0.59,
-    y: SCREEN_HEIGHT * 0.82,
-    width: 60,
-    height: 70,
+    x: SCREEN_WIDTH * 0.60,
+    y: SCREEN_HEIGHT * 0.80,
+    width: 70,
+    height: 80,
     color: "#F59E0B",
     emoji: "♻️",
   },
   general: {
     type: "general",
     label: "EVSEL",
-    x: SCREEN_WIDTH * 0.78,
-    y: SCREEN_HEIGHT * 0.82,
-    width: 60,
-    height: 70,
+    x: SCREEN_WIDTH * 0.79,
+    y: SCREEN_HEIGHT * 0.80,
+    width: 70,
+    height: 80,
     color: "#6B7280",
     emoji: "🗑️",
   },
@@ -198,37 +198,47 @@ export default function CleanupGame({ onExit }) {
       // Çöp bırakma işlemi
       item.dragging = false;
       isDraggingRef.current = false;
-      draggingTrashRef.current = null;
       
-      // Çarpışma kontrolü
+      // Çarpışma kontrolü - ÇOK GENİŞ ALAN
       const trashCenterX = item.x;
       const trashCenterY = item.y;
       
-      console.log('Trash dropped at:', trashCenterX, trashCenterY, 'Type:', item.type);
+      console.log('🗑️ Atık bırakıldı:', trashCenterX.toFixed(0), trashCenterY.toFixed(0), 'Tip:', item.type);
       
       let hitBin = null;
+      let minDistance = Infinity;
+      
+      // En yakın kutuyu bul
       Object.values(BINS).forEach((bin) => {
-        const margin = 40; // Daha geniş tolerans
-        const hit = trashCenterX >= bin.x - margin && 
-            trashCenterX <= bin.x + bin.width + margin &&
-            trashCenterY >= bin.y - margin && 
-            trashCenterY <= bin.y + bin.height + margin;
+        const binCenterX = bin.x + bin.width / 2;
+        const binCenterY = bin.y + bin.height / 2;
+        const distance = Math.sqrt(
+          Math.pow(trashCenterX - binCenterX, 2) + 
+          Math.pow(trashCenterY - binCenterY, 2)
+        );
         
-        console.log('Checking bin:', bin.label, 'at', bin.x, bin.y, 'Hit:', hit);
+        console.log(`📦 ${bin.label}: merkez=(${binCenterX.toFixed(0)}, ${binCenterY.toFixed(0)}) mesafe=${distance.toFixed(0)}px`);
         
-        if (hit) {
+        // 300px mesafe içindeyse (ÇOK ÇOK GENİŞ)
+        if (distance < 300 && distance < minDistance) {
+          minDistance = distance;
           hitBin = bin;
         }
       });
       
       if (hitBin) {
-        console.log('Hit bin:', hitBin.label, 'Correct:', hitBin.type === item.type);
+        console.log('✅ En yakın kutu:', hitBin.label, 'Mesafe:', minDistance.toFixed(0), 'px');
+        console.log('🎯 Tip eşleşmesi:', hitBin.type === item.type ? 'DOĞRU ✓' : 'YANLIŞ ✗');
+      } else {
+        console.log('❌ Hiçbir kutu 300px içinde değil');
       }
       
       if (hitBin && hitBin.type === item.type && phase === "RUNNING") {
+        console.log('🎉 PUAN! Animasyon başlıyor...');
         item.inBoat = true;
         item.targetBin = hitBin;
-        item.spinSpeed = rand(720, 1080);
+        item.spinSpeed = 900;
+        draggingTrashRef.current = null;
         
         const multiplier = COMBOS[comboIndexRef.current];
         const gained = 10 * multiplier;
@@ -240,11 +250,15 @@ export default function CleanupGame({ onExit }) {
         
         setTimeout(() => {
           trashRef.current = trashRef.current.filter((t) => t.id !== item.id);
-        }, 400);
-      } else if (hitBin) {
-        comboIndexRef.current = 0;
-        setComboState("x1.0");
+        }, 500);
+      } else {
+        draggingTrashRef.current = null;
+        if (hitBin) {
+          comboIndexRef.current = 0;
+          setComboState("x1.0");
+        }
       }
+      console.log('---');
     };
 
     if (typeof window !== 'undefined') {
@@ -277,40 +291,43 @@ export default function CleanupGame({ onExit }) {
     if (phase !== "RUNNING" || !trash.dragging) return;
     
     trash.dragging = false;
-    draggingTrashRef.current = null;
     isDraggingRef.current = false;
     
-    // Çöpün merkez noktasını kullanarak çarpışma kontrolü yap
+    // Çarpışma kontrolü - EN YAKIN KUTUYU BUL
     const trashCenterX = trash.x;
     const trashCenterY = trash.y;
     
-    console.log('Touch release - Trash at:', trashCenterX, trashCenterY, 'Type:', trash.type);
+    console.log('📱 Touch - Atık bırakıldı:', trashCenterX.toFixed(0), trashCenterY.toFixed(0), 'Tip:', trash.type);
     
-    // Tüm kutuları kontrol et - daha geniş çarpışma alanı
     let hitBin = null;
+    let minDistance = Infinity;
+    
+    // En yakın kutuyu bul
     Object.values(BINS).forEach((bin) => {
-      const margin = 40;
-      const hit = trashCenterX >= bin.x - margin && 
-          trashCenterX <= bin.x + bin.width + margin &&
-          trashCenterY >= bin.y - margin && 
-          trashCenterY <= bin.y + bin.height + margin;
+      const binCenterX = bin.x + bin.width / 2;
+      const binCenterY = bin.y + bin.height / 2;
+      const distance = Math.sqrt(
+        Math.pow(trashCenterX - binCenterX, 2) + 
+        Math.pow(trashCenterY - binCenterY, 2)
+      );
       
-      console.log('Touch - Checking bin:', bin.label, 'at', bin.x, bin.y, 'Hit:', hit);
-      
-      if (hit) {
+      // 300px mesafe içindeyse (ÇOK ÇOK GENİŞ)
+      if (distance < 300 && distance < minDistance) {
+        minDistance = distance;
         hitBin = bin;
       }
     });
     
     if (hitBin) {
-      console.log('Touch - Hit bin:', hitBin.label, 'Correct:', hitBin.type === trash.type);
+      console.log('📱 Touch - En yakın kutu:', hitBin.label, 'Tip eşleşmesi:', hitBin.type === trash.type);
     }
     
     if (hitBin && hitBin.type === trash.type) {
       // Doğru kovaya atıldı
       trash.inBoat = true;
       trash.targetBin = hitBin;
-      trash.spinSpeed = rand(720, 1080); // Hızlı dönme
+      trash.spinSpeed = 900;
+      draggingTrashRef.current = null;
       
       const multiplier = COMBOS[comboIndexRef.current];
       const gained = 10 * multiplier;
@@ -322,11 +339,14 @@ export default function CleanupGame({ onExit }) {
       
       setTimeout(() => {
         trashRef.current = trashRef.current.filter((t) => t.id !== trash.id);
-      }, 400);
-    } else if (hitBin) {
+      }, 500);
+    } else {
+      draggingTrashRef.current = null;
       // Yanlış kovaya atıldı - combo sıfırla
-      comboIndexRef.current = 0;
-      setComboState("x1.0");
+      if (hitBin) {
+        comboIndexRef.current = 0;
+        setComboState("x1.0");
+      }
     }
   }, [phase]);
 
@@ -365,12 +385,20 @@ export default function CleanupGame({ onExit }) {
   const updateTrash = useCallback((delta) => {
     trashRef.current.forEach((item) => {
       if (item.inBoat && item.targetBin) {
-        // Kovaya doğru animasyon - dönerek gir
-        const dx = item.targetBin.x + item.targetBin.width / 2 - item.x;
-        const dy = item.targetBin.y + item.targetBin.height / 2 - item.y;
-        item.x += dx * delta * 10;
-        item.y += dy * delta * 10;
-        item.rotation += item.spinSpeed * delta;
+        // Kovaya doğru animasyon - HIZLI DÖNEREK GİR!
+        const targetX = item.targetBin.x + item.targetBin.width / 2;
+        const targetY = item.targetBin.y + item.targetBin.height / 2;
+        const dx = targetX - item.x;
+        const dy = targetY - item.y;
+        
+        // Hızlı hareket
+        item.x += dx * delta * 12;
+        item.y += dy * delta * 12;
+        
+        // Hızlı dönüş - spinSpeed yoksa varsayılan kullan
+        const spinSpeed = item.spinSpeed || 900;
+        item.rotation += spinSpeed * delta;
+        
         return;
       }
       

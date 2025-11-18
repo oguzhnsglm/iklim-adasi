@@ -133,6 +133,7 @@ export default function CleanupGame({ onExit }) {
   const [hpState, setHpState] = useState(INITIAL_HP);
   const [phase, setPhase] = useState("TUTORIAL");  // TUTORIAL | RUNNING | PAUSED | ENDED
   const [soundOn, setSoundOn] = useState(true);
+  const [hoverBin, setHoverBin] = useState(null); // Hangi kutunun üzerindeyiz?
   const [, setTick] = useState(0);  // Render zorlamak için
 
   // Ref'ler (performans için - her frame'de güncellenir)
@@ -168,6 +169,7 @@ export default function CleanupGame({ onExit }) {
     setHpState(INITIAL_HP);
     setTimeState(TOTAL_TIME);
     setPhase("RUNNING");
+    setHoverBin(null);
   }, []);
 
   useEffect(() => {
@@ -187,6 +189,21 @@ export default function CleanupGame({ onExit }) {
       const dy = currentY - mouseStartRef.current.y;
       item.x = item.startX + dx;
       item.y = item.startY + dy;
+      
+      // Web için hover kontrolü
+      let closestBin = null;
+      let minDst = Infinity;
+      Object.values(BINS).forEach(bin => {
+         const binCX = bin.x + bin.width/2;
+         const binCY = bin.y + bin.height/2;
+         const d = Math.hypot(item.x - binCX, item.y - binCY);
+         if (d < 100 && d < minDst) {
+            minDst = d;
+            closestBin = bin.type;
+         }
+      });
+      setHoverBin(closestBin);
+
       setTick((prev) => (prev + 1) % 1000);
     };
 
@@ -198,12 +215,11 @@ export default function CleanupGame({ onExit }) {
       // Çöp bırakma işlemi
       item.dragging = false;
       isDraggingRef.current = false;
+      setHoverBin(null);
       
       // Çarpışma kontrolü - ÇOK GENİŞ ALAN
       const trashCenterX = item.x;
       const trashCenterY = item.y;
-      
-      console.log('🗑️ Atık bırakıldı:', trashCenterX.toFixed(0), trashCenterY.toFixed(0), 'Tip:', item.type);
       
       let hitBin = null;
       let minDistance = Infinity;
@@ -217,8 +233,6 @@ export default function CleanupGame({ onExit }) {
           Math.pow(trashCenterY - binCenterY, 2)
         );
         
-        console.log(`📦 ${bin.label}: merkez=(${binCenterX.toFixed(0)}, ${binCenterY.toFixed(0)}) mesafe=${distance.toFixed(0)}px`);
-        
         // 300px mesafe içindeyse (ÇOK ÇOK GENİŞ)
         if (distance < 300 && distance < minDistance) {
           minDistance = distance;
@@ -226,15 +240,8 @@ export default function CleanupGame({ onExit }) {
         }
       });
       
-      if (hitBin) {
-        console.log('✅ En yakın kutu:', hitBin.label, 'Mesafe:', minDistance.toFixed(0), 'px');
-        console.log('🎯 Tip eşleşmesi:', hitBin.type === item.type ? 'DOĞRU ✓' : 'YANLIŞ ✗');
-      } else {
-        console.log('❌ Hiçbir kutu 300px içinde değil');
-      }
-      
       if (hitBin && hitBin.type === item.type && phase === "RUNNING") {
-        console.log('🎉 PUAN! Animasyon başlıyor...');
+        // TODO: Play correct sound
         item.inBoat = true;
         item.targetBin = hitBin;
         item.spinSpeed = 900;
@@ -252,13 +259,13 @@ export default function CleanupGame({ onExit }) {
           trashRef.current = trashRef.current.filter((t) => t.id !== item.id);
         }, 500);
       } else {
+        // TODO: Play wrong sound
         draggingTrashRef.current = null;
         if (hitBin) {
           comboIndexRef.current = 0;
           setComboState("x1.0");
         }
       }
-      console.log('---');
     };
 
     if (typeof window !== 'undefined') {
@@ -292,12 +299,11 @@ export default function CleanupGame({ onExit }) {
     
     trash.dragging = false;
     isDraggingRef.current = false;
+    setHoverBin(null);
     
     // Çarpışma kontrolü - EN YAKIN KUTUYU BUL
     const trashCenterX = trash.x;
     const trashCenterY = trash.y;
-    
-    console.log('📱 Touch - Atık bırakıldı:', trashCenterX.toFixed(0), trashCenterY.toFixed(0), 'Tip:', trash.type);
     
     let hitBin = null;
     let minDistance = Infinity;
@@ -318,12 +324,9 @@ export default function CleanupGame({ onExit }) {
       }
     });
     
-    if (hitBin) {
-      console.log('📱 Touch - En yakın kutu:', hitBin.label, 'Tip eşleşmesi:', hitBin.type === trash.type);
-    }
-    
     if (hitBin && hitBin.type === trash.type) {
       // Doğru kovaya atıldı
+      // TODO: Play correct sound
       trash.inBoat = true;
       trash.targetBin = hitBin;
       trash.spinSpeed = 900;
@@ -341,6 +344,7 @@ export default function CleanupGame({ onExit }) {
         trashRef.current = trashRef.current.filter((t) => t.id !== trash.id);
       }, 500);
     } else {
+      // TODO: Play wrong sound
       draggingTrashRef.current = null;
       // Yanlış kovaya atıldı - combo sıfırla
       if (hitBin) {
@@ -354,6 +358,7 @@ export default function CleanupGame({ onExit }) {
   const handleSharkPress = useCallback((shark) => {
     if (phase !== "RUNNING" || shark.hit) return;
     
+    // TODO: Play shark hit sound
     shark.hit = true;
     hpRef.current = Math.max(0, hpRef.current - 1);
     setHpState(hpRef.current);
@@ -539,34 +544,60 @@ export default function CleanupGame({ onExit }) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      {/* HUD: Süre, skor, combo, can ve duraklat butonu */}
+      
+      {/* 1. Underwater Background */}
+      <View style={styles.bgLayer1} />
+      <View style={styles.bgLayer2} />
+      {/* Decorative bubbles/elements could go here */}
+      
+      {/* HUD: Modernized Top Bar */}
       <View style={styles.hudRow}>
-        <Text style={styles.hudText}>⏱ {timeState}s</Text>
-        <Text style={styles.hudText}>🎯 {scoreState}</Text>
-        <Text style={styles.hudText}>🔥 {comboState}</Text>
-        <Text style={styles.hudText}>❤️ {hpState}</Text>
+        <View style={styles.hudGroup}>
+          <View style={styles.hudItem}>
+            <Text style={styles.hudIcon}>⏱</Text>
+            <Text style={styles.hudText}>{timeState}s</Text>
+          </View>
+          <View style={styles.hudItem}>
+            <Text style={styles.hudIcon}>🎯</Text>
+            <Text style={styles.hudText}>{scoreState}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.hudGroup}>
+          <View style={[styles.hudItem, { borderColor: comboState !== "x1.0" ? "#F59E0B" : "rgba(255,255,255,0.15)" }]}>
+            <Text style={styles.hudIcon}>🔥</Text>
+            <Text style={[styles.hudText, { color: comboState !== "x1.0" ? "#FCD34D" : "#E0F2FE" }]}>{comboState}</Text>
+          </View>
+          <View style={styles.hudItem}>
+            <Text style={styles.hudIcon}>❤️</Text>
+            <Text style={[styles.hudText, { color: hpState < 2 ? "#EF4444" : "#E0F2FE" }]}>{hpState}</Text>
+          </View>
+        </View>
+
         <TouchableOpacity style={styles.pauseButton} onPress={handlePauseToggle}>
           <Text style={styles.pauseLabel}>{phase === "PAUSED" ? "▶" : "||"}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Oyun alanı: Su akıyor, kayık gidiyor */}
+      {/* Oyun alanı */}
       <View style={styles.playArea}>
-        {/* Akan su dalgaları (yukarıdan aşağıya) */}
+        {/* Akan su dalgaları (dekoratif) */}
         {wavesSnapshot.map((wave) => (
           <View
             key={wave.id}
-            style={[
-              styles.waveStripe,
-              {
-                top: wave.y,
-                left: wave.x,
-              },
-            ]}
+            style={{
+              position: "absolute",
+              top: wave.y,
+              left: wave.x,
+              width: SCREEN_WIDTH,
+              height: 2,
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+              transform: [{ scaleX: 1 + wave.amplitude / 50 }],
+            }}
           />
         ))}
 
-        {/* Köpekbalıkları (tehlikeli! - yukarıdan aşağıya kayıyor) */}
+        {/* Köpekbalıkları */}
         {sharksSnapshot.map((shark) => (
           <TouchableOpacity
             key={shark.id}
@@ -575,29 +606,29 @@ export default function CleanupGame({ onExit }) {
             style={[
               styles.shark,
               {
-                left: shark.x - 35,
-                top: shark.y - 25,
+                left: shark.x - 40,
+                top: shark.y - 30,
                 transform: [{ rotate: `${shark.rotation}deg` }],
                 opacity: shark.hit ? 0.3 : 1,
               },
             ]}
           >
-            <Text style={styles.sharkEmoji}>🦈</Text>
+            <Text style={styles.sharkBody}>🦈</Text>
           </TouchableOpacity>
         ))}
 
-        {/* Çöpler (yukarıdan aşağıya kayıyor - sürüklenebilir) */}
+        {/* Çöpler */}
         {trashSnapshot.map((item) => {
-          // Atık tipine göre emoji ve renk
           const trashIcons = {
-            battery: { emoji: "🔋", color: "#DC2626", border: "#991B1B" },
-            paper: { emoji: "📄", color: "#2563EB", border: "#1E40AF" },
-            glass: { emoji: "🍾", color: "#10B981", border: "#065F46" },
-            plastic: { emoji: "♻️", color: "#F59E0B", border: "#D97706" },
-            general: { emoji: "🗑️", color: "#6B7280", border: "#374151" },
+            battery: { emoji: "🔋", color: "#DC2626" },
+            paper: { emoji: "📄", color: "#2563EB" },
+            glass: { emoji: "🍾", color: "#10B981" },
+            plastic: { emoji: "♻️", color: "#F59E0B" },
+            general: { emoji: "🗑️", color: "#6B7280" },
           };
           
           const icon = trashIcons[item.type];
+          const isHovered = item.dragging; // Basitçe sürükleniyorsa highlight
           
           const handleMouseDown = (e) => {
             if (phase !== "RUNNING" || item.inBoat) return;
@@ -633,11 +664,27 @@ export default function CleanupGame({ onExit }) {
                   const dy = touch.pageY - mouseStartRef.current.y;
                   item.x = item.startX + dx;
                   item.y = item.startY + dy;
+                  
+                  // Hover check
+                  let closestBin = null;
+                  let minDst = Infinity;
+                  Object.values(BINS).forEach(bin => {
+                     const binCX = bin.x + bin.width/2;
+                     const binCY = bin.y + bin.height/2;
+                     const d = Math.hypot(item.x - binCX, item.y - binCY);
+                     if (d < 100 && d < minDst) {
+                        minDst = d;
+                        closestBin = bin.type;
+                     }
+                  });
+                  setHoverBin(closestBin);
+
                   setTick((prev) => (prev + 1) % 1000);
                 }
               }}
               onResponderRelease={() => {
                 if (phase === "RUNNING" && item.dragging) {
+                  setHoverBin(null);
                   handleTrashRelease(item);
                 }
               }}
@@ -645,23 +692,25 @@ export default function CleanupGame({ onExit }) {
                 styles.trash,
                 {
                   left: item.x - 35,
-                  top: item.y - 40,
-                  transform: [{ rotate: `${item.rotation}deg` }],
-                  opacity: item.dragging ? 0.9 : item.inBoat ? 0.5 : 1,
+                  top: item.y - 35,
+                  transform: [
+                    { rotate: `${item.rotation}deg` },
+                    { scale: item.dragging ? 1.2 : 1 }
+                  ],
+                  opacity: item.inBoat ? 0.5 : 1,
                   zIndex: item.inBoat ? 100 : item.dragging ? 50 : 10,
                   cursor: 'pointer',
                 },
               ]}
-              // @ts-ignore - Web için mouse olayları
+              // @ts-ignore
               onMouseDown={handleMouseDown}
             >
-              {/* Atık görseli */}
               <View
                 style={[
-                  styles.trashItem,
+                  styles.trashBubble,
                   {
-                    backgroundColor: icon.color,
-                    borderColor: icon.border,
+                    backgroundColor: item.dragging ? icon.color : "rgba(255,255,255,0.2)",
+                    borderColor: item.dragging ? "#FFF" : icon.color,
                   },
                 ]}
               >
@@ -671,40 +720,45 @@ export default function CleanupGame({ onExit }) {
           );
         })}
 
-        {/* Kayık (alt kısımda sabit) */}
+        {/* Bins Area (Bottom) */}
         <View style={styles.boat}>
-          {/* Kayık gövdesi */}
           <View style={styles.boatBody}>
-            {/* Kayık kenarları (perspektif) */}
-            <View style={styles.boatEdgeLeft} />
-            <View style={styles.boatEdgeRight} />
-            
-            {/* Kayık tabanı */}
-            <View style={styles.boatFloor} />
-            
-            {/* Kovalar (kayığın içinde) */}
-            <View style={styles.binsContainer}>
-              {Object.values(BINS).map((bin) => (
-                <View key={bin.type} style={[styles.bin, { backgroundColor: bin.color }]}>
-                  <Text style={styles.binIcon}>{bin.emoji}</Text>
+            {Object.values(BINS).map((bin) => {
+              const isHovered = hoverBin === bin.type;
+              return (
+                <View key={bin.type} style={styles.binWrapper}>
+                  <View 
+                    style={[
+                      styles.bin, 
+                      { 
+                        backgroundColor: bin.color,
+                        transform: isHovered ? [{scale: 1.1}, {translateY: -5}] : [],
+                        borderColor: isHovered ? "#FFF" : "transparent",
+                        borderWidth: isHovered ? 2 : 0,
+                      }
+                    ]}
+                  >
+                    <View style={styles.binLid} />
+                    <Text style={styles.binIcon}>{bin.emoji}</Text>
+                  </View>
                   <Text style={styles.binLabel}>{bin.label}</Text>
                 </View>
-              ))}
-            </View>
+              );
+            })}
           </View>
         </View>
       </View>
 
-      {/* Alt bar: Kontrol butonları */}
+      {/* Alt bar: Modern Buttons */}
       <View style={styles.bottomBar}>
         <TouchableOpacity style={styles.secondaryBtn} onPress={resetGame}>
-          <Text style={styles.secondaryText}>Sıfırla</Text>
+          <Text style={styles.secondaryText}>🔄 Sıfırla</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => setSoundOn((prev) => !prev)}>
-          <Text style={styles.secondaryText}>{soundOn ? "Ses Açık" : "Ses Kapalı"}</Text>
+          <Text style={styles.secondaryText}>{soundOn ? "🔊 Ses Açık" : "🔇 Ses Kapalı"}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryBtn} onPress={onExit}>
-          <Text style={styles.secondaryText}>Menü</Text>
+          <Text style={styles.secondaryText}>🏠 Menü</Text>
         </TouchableOpacity>
       </View>
 
@@ -713,16 +767,14 @@ export default function CleanupGame({ onExit }) {
         <View style={styles.overlay}>
           <View style={styles.overlayCard}>
             {phase === "PAUSED" && <Text style={styles.overlayTitle}>Duraklatıldı</Text>}
-            {phase === "ENDED" && <Text style={styles.overlayTitle}>Süre Bitti</Text>}
+            {phase === "ENDED" && <Text style={styles.overlayTitle}>Süre Bitti!</Text>}
             {phase === "TUTORIAL" && (
               <>
-                <Text style={styles.overlayTitle}>🚣 Nasıl Oynanır?</Text>
-                <Text style={styles.overlayText}>Kayıkla suda gidiyorsun!</Text>
-                <Text style={styles.overlayText}>🌊 Su akıyor, dalgalar geliyor</Text>
-                <Text style={styles.overlayText}>👆 ATIKLARI PARMAĞINLA SÜRÜKLE!</Text>
-                <Text style={styles.overlayText}>♻️ Doğru kutuya at: Pil🔋 Kağıt📄 Cam🍾 Plastik♻️ Evsel🗑️</Text>
-                <Text style={styles.overlayText}>🦈 KÖPEKBALIĞIna TIKLA yoksa can gider! (❤️ -1)</Text>
-                <Text style={styles.overlayText}>⚠️ Atıkları kaçırırsan combo sıfırlanır!</Text>
+                <Text style={styles.overlayTitle}>🌊 Okyanus Temizliği</Text>
+                <Text style={styles.overlayText}>Denizlerimizi temiz tutalım!</Text>
+                <Text style={styles.overlayText}>👆 Atıkları sürükle ve doğru kutuya bırak.</Text>
+                <Text style={styles.overlayText}>🔋 Pil 📄 Kağıt 🍾 Cam ♻️ Plastik 🗑️ Evsel</Text>
+                <Text style={styles.overlayText}>🦈 Köpekbalıklarına dikkat et! Dokunarak uzaklaştır.</Text>
               </>
             )}
             {phase === "PAUSED" && (
@@ -732,18 +784,18 @@ export default function CleanupGame({ onExit }) {
             )}
             {phase === "ENDED" && (
               <>
-                <Text style={styles.overlayText}>Skor: {scoreState}</Text>
+                <Text style={styles.overlayText}>Toplam Skor: {scoreState}</Text>
                 <TouchableOpacity style={styles.cta} onPress={resetGame}>
-                  <Text style={styles.ctaText}>Yeniden Oyna</Text>
+                  <Text style={styles.ctaText}>Tekrar Oyna</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.secondaryBtn} onPress={onExit}>
-                  <Text style={styles.secondaryText}>Menü</Text>
+                  <Text style={styles.secondaryText}>Çıkış</Text>
                 </TouchableOpacity>
               </>
             )}
             {phase === "TUTORIAL" && (
               <TouchableOpacity style={styles.cta} onPress={handleTutorialStart}>
-                <Text style={styles.ctaText}>Hazırım</Text>
+                <Text style={styles.ctaText}>BAŞLA</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -756,265 +808,277 @@ export default function CleanupGame({ onExit }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0369A1",  // Derin deniz mavisi
-    paddingTop: 40,
-    paddingBottom: 10,
+    backgroundColor: "#001e3c", // Deep ocean base
   },
+  // Background Layers
+  bgLayer1: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0288d1", // Lighter blue
+    opacity: 0.3,
+  },
+  bgLayer2: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "40%",
+    backgroundColor: "#4fc3f7", // Surface light
+    opacity: 0.2,
+  },
+  bgDecor: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    height: 200,
+    opacity: 0.6,
+  },
+  bubble: {
+    position: "absolute",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 50,
+  },
+  
+  // HUD
   hudRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
-    paddingHorizontal: 20,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    paddingTop: (StatusBar.currentHeight || 40) + 10,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    zIndex: 100,
+  },
+  hudGroup: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  hudItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
     paddingVertical: 8,
-    marginHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.15)",
+  },
+  hudIcon: {
+    fontSize: 16,
+    marginRight: 6,
   },
   hudText: {
-    fontWeight: "700",
-    color: "#FFFFFF",
-    fontSize: 16,
+    fontWeight: "800",
+    color: "#E0F2FE",
+    fontSize: 15,
+    fontVariant: ["tabular-nums"],
   },
   pauseButton: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   pauseLabel: {
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 14,
   },
+
+  // Play Area
   playArea: {
     flex: 1,
-    backgroundColor: "#0C4A6E",  // Derin su mavisi
     position: "relative",
     overflow: "hidden",
   },
-  waveStripe: {
+  
+  // Game Elements
+  shark: {
     position: "absolute",
-    width: SCREEN_WIDTH,
-    height: 80,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 40,
+    width: 80,
+    height: 60,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 20,
   },
+  sharkBody: {
+    fontSize: 50,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+  },
+  
+  trash: {
+    position: "absolute",
+    width: 70,
+    height: 70,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 30,
+  },
+  trashBubble: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.5)",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  trashEmoji: {
+    fontSize: 30,
+  },
+  
+  // Bins Area
   boat: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: SCREEN_HEIGHT * 0.25,
+    height: SCREEN_HEIGHT * 0.22,
     justifyContent: "flex-end",
+    alignItems: "center",
   },
   boatBody: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#78350F",
-    borderTopLeftRadius: SCREEN_WIDTH * 0.25,
-    borderTopRightRadius: SCREEN_WIDTH * 0.25,
-    position: "relative",
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-    elevation: 10,
-  },
-  boatEdgeLeft: {
-    position: "absolute",
-    left: 20,
-    top: 10,
-    bottom: 30,
-    width: 15,
-    backgroundColor: "#451A03",
-    borderRadius: 8,
-  },
-  boatEdgeRight: {
-    position: "absolute",
-    right: 20,
-    top: 10,
-    bottom: 30,
-    width: 15,
-    backgroundColor: "#451A03",
-    borderRadius: 8,
-  },
-  boatFloor: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 30,
-    backgroundColor: "#92400E",
-    borderTopLeftRadius: 15,
-    borderTopRightRadius: 15,
-  },
-  binsContainer: {
-    position: "absolute",
-    bottom: 35,
-    left: 0,
-    right: 0,
+    backgroundColor: "transparent", // Removed boat look, now just bins on sea floor/dock
     flexDirection: "row",
     justifyContent: "space-around",
+    alignItems: "flex-end",
+    paddingBottom: 20,
     paddingHorizontal: 10,
   },
-  trash: {
-    position: "absolute",
-    width: 70,
-    height: 80,
-    justifyContent: "center",
+  binWrapper: {
     alignItems: "center",
-    zIndex: 10,
-  },
-  trashItem: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    borderWidth: 3,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  trashEmoji: {
-    fontSize: 32,
-  },
-  bottle: {
-    width: 32,
-    height: 50,
-    borderRadius: 10,
-    borderWidth: 3,
-    justifyContent: "flex-start",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  bottleCap: {
-    width: 22,
-    height: 10,
-    borderRadius: 5,
-    marginTop: -3,
-  },
-  bottleLabel: {
-    position: "absolute",
-    top: "50%",
-    backgroundColor: "rgba(255,255,255,0.85)",
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  bottleLabelText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#1F2937",
-  },
-  shark: {
-    position: "absolute",
-    width: 70,
-    height: 50,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 20,
-  },
-  sharkEmoji: {
-    fontSize: 50,
+    justifyContent: "flex-end",
+    width: SCREEN_WIDTH / 5.5,
   },
   bin: {
     width: 60,
     height: 70,
-    borderRadius: 12,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 3,
-    borderColor: "rgba(0,0,0,0.3)",
+    borderWidth: 0,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 12,
-    // 3D perspektif efekti
-    transform: [{ perspective: 1000 }, { rotateX: "5deg" }],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    marginBottom: 5,
+  },
+  binLid: {
+    position: "absolute",
+    top: -5,
+    width: 64,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.3)",
   },
   binIcon: {
-    fontSize: 24,
-    marginBottom: 1,
+    fontSize: 28,
+    marginBottom: 2,
   },
   binLabel: {
     fontWeight: "800",
     color: "#FFFFFF",
-    fontSize: 9,
+    fontSize: 10,
     textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: "hidden",
   },
+
+  // Bottom Bar
   bottomBar: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 8,
-    paddingHorizontal: 10,
-    marginBottom: 5,
+    justifyContent: "center",
+    gap: 15,
+    paddingBottom: 20,
+    paddingTop: 10,
   },
   secondaryBtn: {
-    flex: 1,
-    marginHorizontal: 4,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingVertical: 10,
-    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 30,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
+    borderColor: "rgba(255,255,255,0.2)",
+    flexDirection: "row",
+    gap: 6,
   },
   secondaryText: {
     fontWeight: "700",
     color: "#FFFFFF",
-    fontSize: 13,
+    fontSize: 14,
   },
+
+  // Overlay
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 200,
+    backdropFilter: "blur(10px)", // Works on some versions/web
   },
   overlayCard: {
     width: SCREEN_WIDTH * 0.85,
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 24,
-    gap: 12,
+    backgroundColor: "#1e293b",
+    borderRadius: 30,
+    padding: 30,
+    gap: 16,
     alignItems: "center",
     shadowColor: "#000",
     shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowRadius: 30,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   overlayTitle: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#0369A1",
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#38bdf8",
+    textAlign: "center",
+    marginBottom: 10,
   },
   overlayText: {
-    color: "#374151",
+    color: "#cbd5e1",
     textAlign: "center",
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: "500",
   },
   cta: {
-    backgroundColor: "#0EA5E9",
+    backgroundColor: "#0ea5e9",
     paddingHorizontal: 40,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderRadius: 999,
-    shadowColor: "#0EA5E9",
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowColor: "#0ea5e9",
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 10,
+    marginTop: 10,
   },
   ctaText: {
     color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 16,
+    fontWeight: "800",
+    fontSize: 18,
   },
 });
 

@@ -1,1084 +1,979 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { THEME } from "../theme";
+import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View, Platform, PanResponder, useWindowDimensions, Animated, Easing } from "react-native";
 
-// Ekran boyutları ve sabitler
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const MAX_TRASH = 20;               // Maksimum çöp sayısı
-const MAX_SHARKS = 3;               // Maksimum köpekbalığı sayısı
-const TOTAL_TIME = 90;              // Oyun süresi (saniye)
-const INITIAL_HP = 3;               // Başlangıç canı
-const BOAT_SPEED = 80;              // Kayık hızı (su akış hızı)
-const WAVE_SPEED = 100;             // Dalga hızı
-
-// Kayık pozisyonu (ekranın alt kısmında sabit)
-const BOAT = {
-  x: 0,
-  y: SCREEN_HEIGHT * 0.75,
-  width: SCREEN_WIDTH,
-  height: SCREEN_HEIGHT * 0.25,
+// --- PREMIUM TEMA RENKLERİ ---
+const COLORS = {
+  bgDeep: "#001e36",
+  bgMid: "#004e7a",
+  accent: "#ffd700",
+  glass: "rgba(255, 255, 255, 0.15)",
+  plastic: "#fbbf24",
+  paper: "#38bdf8",
+  glassBin: "#4ade80",
+  metal: "#f87171",
+  organic: "#fb923c",
+  text: "#ffffff"
 };
 
-// Kova pozisyonları (kayığın içinde - ekran koordinatlarında)
-const BINS = {
-  battery: {
-    type: "battery",
-    label: "PİL",
-    x: 20,
-    y: SCREEN_HEIGHT * 0.80,
-    width: 70,
-    height: 80,
-    color: "#DC2626",
-    emoji: "🔋",
-  },
-  paper: {
-    type: "paper",
-    label: "KAĞIT",
-    x: SCREEN_WIDTH * 0.22,
-    y: SCREEN_HEIGHT * 0.80,
-    width: 70,
-    height: 80,
-    color: "#2563EB",
-    emoji: "📄",
-  },
-  glass: {
-    type: "glass",
-    label: "CAM",
-    x: SCREEN_WIDTH * 0.41,
-    y: SCREEN_HEIGHT * 0.80,
-    width: 70,
-    height: 80,
-    color: "#10B981",
-    emoji: "🍾",
-  },
-  plastic: {
-    type: "plastic",
-    label: "PLASTİK",
-    x: SCREEN_WIDTH * 0.60,
-    y: SCREEN_HEIGHT * 0.80,
-    width: 70,
-    height: 80,
-    color: "#F59E0B",
-    emoji: "♻️",
-  },
-  general: {
-    type: "general",
-    label: "EVSEL",
-    x: SCREEN_WIDTH * 0.79,
-    y: SCREEN_HEIGHT * 0.80,
-    width: 70,
-    height: 80,
-    color: "#6B7280",
-    emoji: "🗑️",
-  },
+const TRASH_TYPES = ["plastic", "paper", "glass", "metal", "organic"];
+const TRASH_CONFIG = {
+  plastic: { id: 'plastic', icon: '🥤', label: 'Plastik', color: COLORS.plastic },
+  paper:   { id: 'paper',   icon: '🗞️', label: 'Kağıt',   color: COLORS.paper },
+  glass:   { id: 'glass',   icon: '🍾', label: 'Cam',     color: COLORS.glassBin },
+  metal:   { id: 'metal',   icon: '🔋', label: 'Metal',   color: COLORS.metal },
+  organic: { id: 'organic', icon: '🦴', label: 'Evsel',   color: COLORS.organic }
 };
 
-// Combo çarpanları (ardışık doğru atışlarda artar)
-const COMBOS = [1, 1.5, 2, 3];
+// --- YARDIMCI BİLEŞENLER ---
 
-// Yardımcı fonksiyonlar
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-const rand = (min, max) => Math.random() * (max - min) + min;
-const dist = (x1, y1, x2, y2) => Math.hypot(x1 - x2, y1 - y2);
-
-// Dalga oluşturma (ekranın üstünden başlar, aşağı kayar)
-const createWave = (offsetY = 0) => ({
-  id: `wave-${Math.random().toString(36).slice(2)}`,
-  y: -50 + offsetY,
-  x: rand(-20, 20),
-  amplitude: rand(10, 25),
-  frequency: rand(0.01, 0.03),
-});
-
-// Çöp oluşturma (ekranın üstünden spawn olur, aşağı kayar)
-const spawnTrash = () => {
-  const types = ["battery", "paper", "glass", "plastic", "general"];
-  const selectedType = types[Math.floor(Math.random() * types.length)];
+// Arka Plan Efektleri (God Rays & Bubbles)
+const OceanBackground = () => {
+  const { width, height } = useWindowDimensions();
   
-  return {
-    id: `trash-${Math.random().toString(36).slice(2)}`,
-    type: selectedType,
-    x: rand(SCREEN_WIDTH * 0.15, SCREEN_WIDTH * 0.85),
-    y: -80,  // Ekranın üstünden başlar
-    rotation: rand(0, 360),
-    bobPhase: rand(0, Math.PI * 2),
-    dragging: false,   // Sürükleniyor mu?
-    startX: 0,         // Sürükleme başlangıç pozisyonu
-    startY: 0,
-    offsetX: 0,        // Dokunma noktası ile obje merkezi arası fark
-    offsetY: 0,
-    inBoat: false,
-    targetBin: null,
-    spinSpeed: 0,      // Dönerken hız
-  };
-};
-
-// Köpekbalığı oluşturma (yukarıdan aşağıya kayar)
-const spawnShark = () => ({
-  id: `shark-${Math.random().toString(36).slice(2)}`,
-  x: rand(SCREEN_WIDTH * 0.15, SCREEN_WIDTH * 0.85),
-  y: -80,  // Ekranın üstünden başlar
-  rotation: rand(-15, 15),
-  bobPhase: rand(0, Math.PI * 2),
-  attackCooldown: 0,
-  hit: false,
-});
-
-// Ana oyun bileşeni
-export default function CleanupGame({ onExit }) {
-  // State'ler (sadece UI için)
-  const [scoreState, setScoreState] = useState(0);
-  const [comboState, setComboState] = useState("x1.0");
-  const [timeState, setTimeState] = useState(TOTAL_TIME);
-  const [hpState, setHpState] = useState(INITIAL_HP);
-  const [phase, setPhase] = useState("TUTORIAL");  // TUTORIAL | RUNNING | PAUSED | ENDED
-  const [soundOn, setSoundOn] = useState(true);
-  const [hoverBin, setHoverBin] = useState(null); // Hangi kutunun üzerindeyiz?
-  const [, setTick] = useState(0);  // Render zorlamak için
-
-  // Ref'ler (performans için - her frame'de güncellenir)
-  const wavesRef = useRef([createWave(0), createWave(200), createWave(400)]);
-  const trashRef = useRef([]);
-  const sharksRef = useRef([]);
-  const draggingTrashRef = useRef(null);  // Şu an sürüklenen çöp
-  const scoreRef = useRef(0);
-  const comboIndexRef = useRef(0);
-  const hpRef = useRef(INITIAL_HP);
-  const timeRef = useRef(TOTAL_TIME);
-  const spawnTimerRef = useRef(1.5);
-  const sharkSpawnTimerRef = useRef(3);
-  const rafRef = useRef(null);
-  const lastFrameRef = useRef(null);
-  const isDraggingRef = useRef(false);
-  const mouseStartRef = useRef({ x: 0, y: 0 });
-
-  // Oyunu sıfırlama
-  const resetGame = useCallback(() => {
-    wavesRef.current = [createWave(0), createWave(200), createWave(400)];
-    trashRef.current = [];
-    sharksRef.current = [];
-    draggingTrashRef.current = null;
-    scoreRef.current = 0;
-    comboIndexRef.current = 0;
-    hpRef.current = INITIAL_HP;
-    timeRef.current = TOTAL_TIME;
-    spawnTimerRef.current = 1.5;
-    sharkSpawnTimerRef.current = 3;
-    setScoreState(0);
-    setComboState("x1.0");
-    setHpState(INITIAL_HP);
-    setTimeState(TOTAL_TIME);
-    setPhase("RUNNING");
-    setHoverBin(null);
-  }, []);
+  // Baloncuklar
+  const bubbles = useRef([...Array(15)].map(() => ({
+    anim: new Animated.Value(0),
+    left: Math.random() * width,
+    size: Math.random() * 20 + 5,
+    speed: Math.random() * 5000 + 5000,
+    delay: Math.random() * 5000
+  }))).current;
 
   useEffect(() => {
-    resetGame();
-    setPhase("TUTORIAL");
-  }, [resetGame]);
-
-  // Global mouse olayları (web için)
-  useEffect(() => {
-    const handleGlobalMouseMove = (e) => {
-      if (!isDraggingRef.current || !draggingTrashRef.current) return;
-      e.preventDefault();
-      const item = draggingTrashRef.current;
-      const currentX = e.clientX || e.pageX;
-      const currentY = e.clientY || e.pageY;
-      const dx = currentX - mouseStartRef.current.x;
-      const dy = currentY - mouseStartRef.current.y;
-      item.x = item.startX + dx;
-      item.y = item.startY + dy;
-      
-      // Web için hover kontrolü
-      let closestBin = null;
-      let minDst = Infinity;
-      Object.values(BINS).forEach(bin => {
-         const binCX = bin.x + bin.width/2;
-         const binCY = bin.y + bin.height/2;
-         const d = Math.hypot(item.x - binCX, item.y - binCY);
-         if (d < 100 && d < minDst) {
-            minDst = d;
-            closestBin = bin.type;
-         }
-      });
-      setHoverBin(closestBin);
-
-      setTick((prev) => (prev + 1) % 1000);
-    };
-
-    const handleGlobalMouseUp = () => {
-      if (!isDraggingRef.current || !draggingTrashRef.current) return;
-      const item = draggingTrashRef.current;
-      if (!item.dragging) return;
-      
-      // Çöp bırakma işlemi
-      item.dragging = false;
-      isDraggingRef.current = false;
-      setHoverBin(null);
-      
-      // Çarpışma kontrolü - ÇOK GENİŞ ALAN
-      const trashCenterX = item.x;
-      const trashCenterY = item.y;
-      
-      let hitBin = null;
-      let minDistance = Infinity;
-      
-      // En yakın kutuyu bul
-      Object.values(BINS).forEach((bin) => {
-        const binCenterX = bin.x + bin.width / 2;
-        const binCenterY = bin.y + bin.height / 2;
-        const distance = Math.sqrt(
-          Math.pow(trashCenterX - binCenterX, 2) + 
-          Math.pow(trashCenterY - binCenterY, 2)
-        );
-        
-        // 300px mesafe içindeyse (ÇOK ÇOK GENİŞ)
-        if (distance < 300 && distance < minDistance) {
-          minDistance = distance;
-          hitBin = bin;
-        }
-      });
-      
-      if (hitBin && hitBin.type === item.type && phase === "RUNNING") {
-        // TODO: Play correct sound
-        item.inBoat = true;
-        item.targetBin = hitBin;
-        item.spinSpeed = 900;
-        draggingTrashRef.current = null;
-        
-        const multiplier = COMBOS[comboIndexRef.current];
-        const gained = 10 * multiplier;
-        scoreRef.current += gained;
-        comboIndexRef.current = Math.min(comboIndexRef.current + 1, COMBOS.length - 1);
-        
-        setScoreState(Math.round(scoreRef.current));
-        setComboState(`x${multiplier.toFixed(1)}`);
-        
-        setTimeout(() => {
-          trashRef.current = trashRef.current.filter((t) => t.id !== item.id);
-        }, 500);
-      } else {
-        // TODO: Play wrong sound
-        draggingTrashRef.current = null;
-        if (hitBin) {
-          comboIndexRef.current = 0;
-          setComboState("x1.0");
-        }
-      }
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('mousemove', handleGlobalMouseMove);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleGlobalMouseMove);
-        window.removeEventListener('mouseup', handleGlobalMouseUp);
-      };
-    }
-  }, [phase]);
-
-  // Skor güncelleme (doğru/yanlış sayısına göre combo artır/sıfırla)
-  const updateScore = useCallback((correct, wrong) => {
-    if (wrong > 0) {
-      comboIndexRef.current = 0;  // Yanlış atış combo'yu sıfırlar
-    } else if (correct > 0) {
-      comboIndexRef.current = Math.min(comboIndexRef.current + 1, COMBOS.length - 1);
-    }
-    const multiplier = COMBOS[comboIndexRef.current];
-    const gained = correct * 10 * multiplier;
-    const penalty = wrong * 5;
-    scoreRef.current = Math.max(0, scoreRef.current + gained - penalty);  // Skor 0 altına inmez
-    setScoreState(Math.round(scoreRef.current));
-    setComboState(`x${multiplier.toFixed(1)}`);
-  }, []);
-
-  // Çöp bırakma
-  const handleTrashRelease = useCallback((trash) => {
-    if (phase !== "RUNNING" || !trash.dragging) return;
-    
-    trash.dragging = false;
-    isDraggingRef.current = false;
-    setHoverBin(null);
-    
-    // Çarpışma kontrolü - EN YAKIN KUTUYU BUL
-    const trashCenterX = trash.x;
-    const trashCenterY = trash.y;
-    
-    let hitBin = null;
-    let minDistance = Infinity;
-    
-    // En yakın kutuyu bul
-    Object.values(BINS).forEach((bin) => {
-      const binCenterX = bin.x + bin.width / 2;
-      const binCenterY = bin.y + bin.height / 2;
-      const distance = Math.sqrt(
-        Math.pow(trashCenterX - binCenterX, 2) + 
-        Math.pow(trashCenterY - binCenterY, 2)
-      );
-      
-      // 300px mesafe içindeyse (ÇOK ÇOK GENİŞ)
-      if (distance < 300 && distance < minDistance) {
-        minDistance = distance;
-        hitBin = bin;
-      }
-    });
-    
-    if (hitBin && hitBin.type === trash.type) {
-      // Doğru kovaya atıldı
-      // TODO: Play correct sound
-      trash.inBoat = true;
-      trash.targetBin = hitBin;
-      trash.spinSpeed = 900;
-      draggingTrashRef.current = null;
-      
-      const multiplier = COMBOS[comboIndexRef.current];
-      const gained = 10 * multiplier;
-      scoreRef.current += gained;
-      comboIndexRef.current = Math.min(comboIndexRef.current + 1, COMBOS.length - 1);
-      
-      setScoreState(Math.round(scoreRef.current));
-      setComboState(`x${multiplier.toFixed(1)}`);
-      
-      setTimeout(() => {
-        trashRef.current = trashRef.current.filter((t) => t.id !== trash.id);
-      }, 500);
-    } else {
-      // TODO: Play wrong sound
-      draggingTrashRef.current = null;
-      // Yanlış kovaya atıldı - combo sıfırla
-      if (hitBin) {
-        comboIndexRef.current = 0;
-        setComboState("x1.0");
-      }
-    }
-  }, [phase]);
-
-  // Köpekbalığına tıklama - hasar al
-  const handleSharkPress = useCallback((shark) => {
-    if (phase !== "RUNNING" || shark.hit) return;
-    
-    // TODO: Play shark hit sound
-    shark.hit = true;
-    hpRef.current = Math.max(0, hpRef.current - 1);
-    setHpState(hpRef.current);
-    
-    // Köpekbalığını kaldır
-    setTimeout(() => {
-      sharksRef.current = sharksRef.current.filter((s) => s.id !== shark.id);
-    }, 300);
-    
-    // Can biterse oyun biter
-    if (hpRef.current <= 0) {
-      setPhase("ENDED");
-    }
-  }, [phase]);
-
-  // Dalgaları güncelle (yukarıdan aşağıya hareket)
-  const updateWaves = useCallback((delta) => {
-    wavesRef.current.forEach((wave) => {
-      wave.y += WAVE_SPEED * delta;
-      // Ekranın altından çıkınca üste geri dön
-      if (wave.y > SCREEN_HEIGHT + 50) {
-        wave.y = -50;
-        wave.x = rand(-20, 20);
-      }
+    bubbles.forEach(b => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(b.delay),
+          Animated.timing(b.anim, {
+            toValue: 1,
+            duration: b.speed,
+            easing: Easing.linear,
+            useNativeDriver: true
+          })
+        ])
+      ).start();
     });
   }, []);
-
-  // Çöpleri güncelle (yukarıdan aşağıya kayar)
-  const updateTrash = useCallback((delta) => {
-    trashRef.current.forEach((item) => {
-      if (item.inBoat && item.targetBin) {
-        // Kovaya doğru animasyon - HIZLI DÖNEREK GİR!
-        const targetX = item.targetBin.x + item.targetBin.width / 2;
-        const targetY = item.targetBin.y + item.targetBin.height / 2;
-        const dx = targetX - item.x;
-        const dy = targetY - item.y;
-        
-        // Hızlı hareket
-        item.x += dx * delta * 12;
-        item.y += dy * delta * 12;
-        
-        // Hızlı dönüş - spinSpeed yoksa varsayılan kullan
-        const spinSpeed = item.spinSpeed || 900;
-        item.rotation += spinSpeed * delta;
-        
-        return;
-      }
-      
-      if (item.dragging) {
-        // Sürüklenirken hafif dönme
-        item.rotation += 180 * delta;
-        return;
-      }
-      
-      // Su akışı ile aşağı kay
-      item.y += BOAT_SPEED * delta;
-      item.bobPhase += 3 * delta;
-      item.x += Math.sin(item.bobPhase) * 15 * delta;
-      item.rotation += 30 * delta;
-      
-      // Ekranın altından geçtiyse kaldır (kaçırıldı)
-      if (item.y > SCREEN_HEIGHT + 50) {
-        // Combo sıfırla (çöp kaçırıldı)
-        comboIndexRef.current = 0;
-        setComboState("x1.0");
-      }
-    });
-    
-    // Ekranın altından geçen çöpleri kaldır
-    trashRef.current = trashRef.current.filter((item) => item.y < SCREEN_HEIGHT + 50 || item.inBoat);
-  }, []);
-
-  // Köpekbalıklarını güncelle (yukarıdan aşağıya kayar)
-  const updateSharks = useCallback((delta) => {
-    sharksRef.current.forEach((shark) => {
-      if (shark.hit) return;
-      
-      // Su akışı ile aşağı kay
-      shark.y += BOAT_SPEED * delta;
-      shark.bobPhase += 2 * delta;
-      shark.x += Math.sin(shark.bobPhase) * 20 * delta;
-      
-      // Ekranın altından geçtiyse hasar ver
-      if (shark.y > SCREEN_HEIGHT - 50 && !shark.hit) {
-        shark.hit = true;
-        hpRef.current = Math.max(0, hpRef.current - 1);
-        setHpState(hpRef.current);
-        
-        // Can biterse oyun biter
-        if (hpRef.current <= 0) {
-          setPhase("ENDED");
-        }
-      }
-    });
-    
-    // Ekranın dışına çıkan köpekbalıklarını kaldır
-    sharksRef.current = sharksRef.current.filter((shark) => shark.y < SCREEN_HEIGHT + 100);
-  }, []);
-
-  // Çöp spawn sistemi
-  const updateSpawn = useCallback(() => {
-    const activeTrash = trashRef.current.filter((t) => !t.inBoat).length;
-    if (activeTrash >= MAX_TRASH) return;
-    
-    // Yeni çöp ekle
-    trashRef.current.push(spawnTrash());
-  }, []);
-
-  // Köpekbalığı spawn sistemi
-  const updateSharkSpawn = useCallback(() => {
-    if (sharksRef.current.length >= MAX_SHARKS) return;
-    sharksRef.current.push(spawnShark());
-  }, []);
-
-  // Süre sayacı (0'a düşünce oyun biter)
-  const updateTimer = useCallback(
-    (delta) => {
-      timeRef.current = Math.max(0, timeRef.current - delta);
-      const seconds = Math.ceil(timeRef.current);
-      if (seconds !== timeState) {
-        setTimeState(seconds);
-      }
-      if (timeRef.current <= 0) {
-        setPhase("ENDED");
-      }
-    },
-    [timeState],
-  );
-
-  // Oyun döngüsü (requestAnimationFrame)
-  useEffect(() => {
-    const loop = (ts) => {
-      if (!lastFrameRef.current) lastFrameRef.current = ts;
-      const delta = Math.min((ts - lastFrameRef.current) / 1000, 0.05);
-      lastFrameRef.current = ts;
-
-      if (phase === "RUNNING") {
-        // Çöp spawn timer
-        spawnTimerRef.current -= delta;
-        if (spawnTimerRef.current <= 0) {
-          updateSpawn();
-          // Oyun ilerledikçe spawn hızlanır
-          spawnTimerRef.current = clamp(2 - (1 - timeRef.current / TOTAL_TIME) * 1.2, 0.5, 2);
-        }
-        
-        // Köpekbalığı spawn timer
-        sharkSpawnTimerRef.current -= delta;
-        if (sharkSpawnTimerRef.current <= 0) {
-          updateSharkSpawn();
-          sharkSpawnTimerRef.current = rand(4, 8);  // 4-8 saniye arası
-        }
-        
-        updateWaves(delta);
-        updateTrash(delta);
-        updateSharks(delta);
-        updateTimer(delta);
-        setTick((prev) => (prev + 1) % 1000);  // Render zorla
-      }
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [phase, updateSharkSpawn, updateSharks, updateSpawn, updateTimer, updateTrash, updateWaves]);
-
-  // Duraklatma/devam kontrolü
-  const handlePauseToggle = () => {
-    if (phase === "RUNNING") setPhase("PAUSED");
-    else if (phase === "PAUSED") setPhase("RUNNING");
-  };
-
-  // Tutorial'dan oyuna başlama
-  const handleTutorialStart = () => {
-    setPhase("RUNNING");
-  };
-
-  // Render için snapshot'lar (ref'lerin anlık değerleri)
-  const wavesSnapshot = wavesRef.current;
-  const trashSnapshot = trashRef.current;
-  const sharksSnapshot = sharksRef.current;
 
   return (
-    <View style={styles.container}>
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.bgDeep, overflow: 'hidden' }]}>
+      {/* Radyal Gradyan benzeri bir efekt için merkezde aydınlık bir daire */}
+      <View style={{
+        position: 'absolute',
+        top: -height * 0.2,
+        left: -width * 0.2,
+        width: width * 1.4,
+        height: width * 1.4,
+        borderRadius: width,
+        backgroundColor: COLORS.bgMid,
+        opacity: 0.4,
+        transform: [{ scaleX: 1.5 }]
+      }} />
+
+      {/* God Rays (Işık Hüzmeleri) */}
+      <View style={{
+        position: 'absolute',
+        top: -100,
+        left: width * 0.2,
+        width: 60,
+        height: height * 1.5,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        transform: [{ rotate: '25deg' }]
+      }} />
+      <View style={{
+        position: 'absolute',
+        top: -100,
+        left: width * 0.5,
+        width: 80,
+        height: height * 1.5,
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        transform: [{ rotate: '20deg' }]
+      }} />
+
+      {/* Baloncuklar */}
+      {bubbles.map((b, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: b.left,
+            bottom: -50,
+            width: b.size,
+            height: b.size,
+            borderRadius: b.size / 2,
+            backgroundColor: 'rgba(255,255,255,0.15)',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.3)',
+            transform: [{
+              translateY: b.anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, -height - 100]
+              })
+            }]
+          }}
+        />
+      ))}
+    </View>
+  );
+};
+
+// 3D Görünümlü Kova
+const Bin3D = ({ type, style, label, icon, isSelected, onClick }) => {
+  const cfg = TRASH_CONFIG[type];
+  return (
+    <TouchableOpacity activeOpacity={0.9} onPress={onClick} style={[styles.binWrapper, style, isSelected && styles.binSelected]}>
+      {/* Kova Ağzı (Rim) */}
+      <View style={[styles.binRim, { borderColor: cfg.color }]} />
+      {/* Kova Gövdesi */}
+      <View style={[styles.binBody, { borderColor: cfg.color }]}>
+        <View style={[styles.binBodyGradient, { backgroundColor: cfg.color }]} />
+        <View style={styles.binSticker}>
+          <Text style={{ fontSize: 20 }}>{cfg.icon}</Text>
+          <Text style={styles.binLabelText}>{cfg.label}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// HUD (Skor Tablosu)
+const GameHUD = ({ score, time, lives, onBack }) => (
+  <View style={styles.hudBar}>
+    <TouchableOpacity style={styles.glassPanel} onPress={onBack}>
+      <Text style={styles.hudIcon}>↩</Text>
+    </TouchableOpacity>
+    <View style={styles.glassPanel}>
+      <Text style={styles.hudIcon}>⭐</Text>
+      <Text style={styles.hudText}>{score}</Text>
+    </View>
+    <View style={styles.glassPanel}>
+      <Text style={styles.hudIcon}>⏱️</Text>
+      <Text style={styles.hudText}>{Math.ceil(time)}</Text>
+    </View>
+    <View style={styles.glassPanel}>
+      <Text style={styles.hudIcon}>❤️</Text>
+      <Text style={styles.hudText}>{lives}</Text>
+    </View>
+  </View>
+);
+
+// --- ANA BİLEŞEN ---
+export default function CleanupGame({ onExit }) {
+  const [gameMode, setGameMode] = useState("SELECTION"); // SELECTION | CLASSIC | SLINGSHOT | LANE
+
+  return (
+    <View style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" />
+      <OceanBackground />
       
-      {/* 1. Underwater Background */}
-      <View style={styles.bgLayer1} />
-      <View style={styles.bgLayer2} />
-      {/* Decorative bubbles/elements could go here */}
-      
-      {/* HUD: Modernized Top Bar */}
-      <View style={styles.hudRow}>
-        <View style={styles.hudGroup}>
-          <View style={styles.hudItem}>
-            <Text style={styles.hudIcon}>⏱</Text>
-            <Text style={styles.hudText}>{timeState}s</Text>
-          </View>
-          <View style={styles.hudItem}>
-            <Text style={styles.hudIcon}>🎯</Text>
-            <Text style={styles.hudText}>{scoreState}</Text>
-          </View>
-        </View>
-        
-        <View style={styles.hudGroup}>
-          <View style={[styles.hudItem, { borderColor: comboState !== "x1.0" ? "#F59E0B" : "rgba(255,255,255,0.15)" }]}>
-            <Text style={styles.hudIcon}>🔥</Text>
-            <Text style={[styles.hudText, { color: comboState !== "x1.0" ? "#FCD34D" : "#E0F2FE" }]}>{comboState}</Text>
-          </View>
-          <View style={styles.hudItem}>
-            <Text style={styles.hudIcon}>❤️</Text>
-            <Text style={[styles.hudText, { color: hpState < 2 ? "#EF4444" : "#E0F2FE" }]}>{hpState}</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.pauseButton} onPress={handlePauseToggle}>
-          <Text style={styles.pauseLabel}>{phase === "PAUSED" ? "▶" : "||"}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Oyun alanı */}
-      <View style={styles.playArea}>
-        {/* Akan su dalgaları (dekoratif) */}
-        {wavesSnapshot.map((wave) => (
-          <View
-            key={wave.id}
-            style={{
-              position: "absolute",
-              top: wave.y,
-              left: wave.x,
-              width: SCREEN_WIDTH,
-              height: 2,
-              backgroundColor: "rgba(255, 255, 255, 0.05)",
-              transform: [{ scaleX: 1 + wave.amplitude / 50 }],
-            }}
-          />
-        ))}
-
-        {/* Köpekbalıkları */}
-        {sharksSnapshot.map((shark) => (
-          <TouchableOpacity
-            key={shark.id}
-            activeOpacity={0.7}
-            onPress={() => handleSharkPress(shark)}
-            style={[
-              styles.shark,
-              {
-                left: shark.x - 40,
-                top: shark.y - 30,
-                transform: [{ rotate: `${shark.rotation}deg` }],
-                opacity: shark.hit ? 0.3 : 1,
-              },
-            ]}
-          >
-            <Text style={styles.sharkBody}>🦈</Text>
-          </TouchableOpacity>
-        ))}
-
-        {/* Çöpler */}
-        {trashSnapshot.map((item) => {
-          const trashIcons = {
-            battery: { emoji: "🔋", color: "#DC2626" },
-            paper: { emoji: "📄", color: "#2563EB" },
-            glass: { emoji: "🍾", color: "#10B981" },
-            plastic: { emoji: "♻️", color: "#F59E0B" },
-            general: { emoji: "🗑️", color: "#6B7280" },
-          };
-          
-          const icon = trashIcons[item.type];
-          const isHovered = item.dragging; // Basitçe sürükleniyorsa highlight
-          
-          const handleMouseDown = (e) => {
-            if (phase !== "RUNNING" || item.inBoat) return;
-            e.preventDefault();
-            e.stopPropagation();
-            item.dragging = true;
-            item.startX = item.x;
-            item.startY = item.y;
-            mouseStartRef.current = { x: e.clientX || e.pageX, y: e.clientY || e.pageY };
-            draggingTrashRef.current = item;
-            isDraggingRef.current = true;
-          };
-          
-          return (
-            <View
-              key={item.id}
-              onStartShouldSetResponder={() => phase === "RUNNING" && !item.inBoat}
-              onMoveShouldSetResponder={() => phase === "RUNNING" && item.dragging}
-              onResponderGrant={(evt) => {
-                if (phase === "RUNNING" && !item.inBoat) {
-                  item.dragging = true;
-                  item.startX = item.x;
-                  item.startY = item.y;
-                  mouseStartRef.current = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
-                  draggingTrashRef.current = item;
-                  isDraggingRef.current = true;
-                }
-              }}
-              onResponderMove={(evt) => {
-                if (phase === "RUNNING" && item.dragging && draggingTrashRef.current?.id === item.id) {
-                  const touch = evt.nativeEvent;
-                  const dx = touch.pageX - mouseStartRef.current.x;
-                  const dy = touch.pageY - mouseStartRef.current.y;
-                  item.x = item.startX + dx;
-                  item.y = item.startY + dy;
-                  
-                  // Hover check
-                  let closestBin = null;
-                  let minDst = Infinity;
-                  Object.values(BINS).forEach(bin => {
-                     const binCX = bin.x + bin.width/2;
-                     const binCY = bin.y + bin.height/2;
-                     const d = Math.hypot(item.x - binCX, item.y - binCY);
-                     if (d < 100 && d < minDst) {
-                        minDst = d;
-                        closestBin = bin.type;
-                     }
-                  });
-                  setHoverBin(closestBin);
-
-                  setTick((prev) => (prev + 1) % 1000);
-                }
-              }}
-              onResponderRelease={() => {
-                if (phase === "RUNNING" && item.dragging) {
-                  setHoverBin(null);
-                  handleTrashRelease(item);
-                }
-              }}
-              style={[
-                styles.trash,
-                {
-                  left: item.x - 35,
-                  top: item.y - 35,
-                  transform: [
-                    { rotate: `${item.rotation}deg` },
-                    { scale: item.dragging ? 1.2 : 1 }
-                  ],
-                  opacity: item.inBoat ? 0.5 : 1,
-                  zIndex: item.inBoat ? 100 : item.dragging ? 50 : 10,
-                  cursor: 'pointer',
-                },
-              ]}
-              // @ts-ignore
-              onMouseDown={handleMouseDown}
-            >
-              <View
-                style={[
-                  styles.trashBubble,
-                  {
-                    backgroundColor: item.dragging ? icon.color : "rgba(255,255,255,0.2)",
-                    borderColor: item.dragging ? "#FFF" : icon.color,
-                  },
-                ]}
-              >
-                <Text style={styles.trashEmoji}>{icon.emoji}</Text>
-              </View>
-            </View>
-          );
-        })}
-
-        {/* Bins Area (Bottom) */}
-        <View style={styles.boat}>
-          <View style={styles.boatBody}>
-            {Object.values(BINS).map((bin) => {
-              const isHovered = hoverBin === bin.type;
-              return (
-                <View key={bin.type} style={styles.binWrapper}>
-                  <View 
-                    style={[
-                      styles.bin, 
-                      { 
-                        backgroundColor: bin.color,
-                        transform: isHovered ? [{scale: 1.1}, {translateY: -5}] : [],
-                        borderColor: isHovered ? "#FFF" : "transparent",
-                        borderWidth: isHovered ? 2 : 0,
-                      }
-                    ]}
-                  >
-                    <View style={styles.binLid} />
-                    <Text style={styles.binIcon}>{bin.emoji}</Text>
-                  </View>
-                  <Text style={styles.binLabel}>{bin.label}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-
-      {/* Alt bar: Modern Buttons */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.secondaryBtn} onPress={resetGame}>
-          <Text style={styles.secondaryText}>🔄 Sıfırla</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => setSoundOn((prev) => !prev)}>
-          <Text style={styles.secondaryText}>{soundOn ? "🔊 Ses Açık" : "🔇 Ses Kapalı"}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryBtn} onPress={onExit}>
-          <Text style={styles.secondaryText}>🏠 Menü</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Overlay: Tutorial, Duraklat, Oyun Bitti */}
-      {(phase === "PAUSED" || phase === "ENDED" || phase === "TUTORIAL") && (
-        <View style={styles.overlay}>
-          <View style={styles.overlayCard}>
-            {phase === "PAUSED" && <Text style={styles.overlayTitle}>Duraklatıldı</Text>}
-            {phase === "ENDED" && <Text style={styles.overlayTitle}>Süre Bitti!</Text>}
-            {phase === "TUTORIAL" && (
-              <>
-                <Text style={styles.overlayTitle}>🌊 Okyanus Temizliği</Text>
-                <Text style={styles.overlayText}>Denizlerimizi temiz tutalım!</Text>
-                <Text style={styles.overlayText}>👆 Atıkları sürükle ve doğru kutuya bırak.</Text>
-                <Text style={styles.overlayText}>🔋 Pil 📄 Kağıt 🍾 Cam ♻️ Plastik 🗑️ Evsel</Text>
-                <Text style={styles.overlayText}>🦈 Köpekbalıklarına dikkat et! Dokunarak uzaklaştır.</Text>
-              </>
-            )}
-            {phase === "PAUSED" && (
-              <TouchableOpacity style={styles.cta} onPress={handlePauseToggle}>
-                <Text style={styles.ctaText}>Devam Et</Text>
-              </TouchableOpacity>
-            )}
-            {phase === "ENDED" && (
-              <>
-                <Text style={styles.overlayText}>Toplam Skor: {scoreState}</Text>
-                <TouchableOpacity style={styles.cta} onPress={resetGame}>
-                  <Text style={styles.ctaText}>Tekrar Oyna</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.secondaryBtn} onPress={onExit}>
-                  <Text style={styles.secondaryText}>Çıkış</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {phase === "TUTORIAL" && (
-              <TouchableOpacity style={styles.cta} onPress={handleTutorialStart}>
-                <Text style={styles.ctaText}>BAŞLA</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
+      {gameMode === "SELECTION" && <ModeSelectionScreen onSelectMode={setGameMode} onExit={onExit} />}
+      {gameMode === "CLASSIC" && <CleanupGameClassic onBack={() => setGameMode("SELECTION")} />}
+      {gameMode === "SLINGSHOT" && <CleanupGameSlingshot onBack={() => setGameMode("SELECTION")} />}
+      {gameMode === "LANE" && <CleanupGameLaneSwap onBack={() => setGameMode("SELECTION")} />}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#001e3c", // Deep ocean base
-  },
-  // Background Layers
-  bgLayer1: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#0288d1", // Lighter blue
-    opacity: 0.3,
-  },
-  bgLayer2: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "40%",
-    backgroundColor: "#4fc3f7", // Surface light
-    opacity: 0.2,
-  },
-  bgDecor: {
-    position: "absolute",
-    bottom: 0,
-    width: "100%",
-    height: 200,
-    opacity: 0.6,
-  },
-  bubble: {
-    position: "absolute",
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 50,
-  },
+// --- MENÜ EKRANI ---
+function ModeSelectionScreen({ onSelectMode, onExit }) {
+  return (
+    <View style={styles.menuContainer}>
+      <Text style={styles.menuTitle}>OKYANUS{"\n"}<Text style={{ fontSize: 24, opacity: 0.8 }}>TEMİZLİĞİ</Text></Text>
+      
+      <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("CLASSIC")}>
+        <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🚮</Text></View>
+        <View>
+          <Text style={styles.cardTitle}>Klasik Ayrıştırma</Text>
+          <Text style={styles.cardDesc}>Atıkları sürükle ve kutulara bırak.</Text>
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("SLINGSHOT")}>
+        <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🏀</Text></View>
+        <View>
+          <Text style={styles.cardTitle}>Sapan Basketi</Text>
+          <Text style={styles.cardDesc}>Çek, nişan al ve potaya basket at!</Text>
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("LANE")}>
+        <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🎹</Text></View>
+        <View>
+          <Text style={styles.cardTitle}>Şerit Değiştir</Text>
+          <Text style={styles.cardDesc}>Kutuların yerini değiştir, atığı yakala.</Text>
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.glassPanel, { marginTop: 20 }]} onPress={onExit}>
+        <Text style={styles.hudText}>Ana Menüye Dön</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// --- MOD 1: KLASİK (SÜRÜKLE BIRAK) ---
+function CleanupGameClassic({ onBack }) {
+  const { width, height } = useWindowDimensions();
+  const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(3);
+  const [time, setTime] = useState(60);
+  const [items, setItems] = useState([]);
+  const [phase, setPhase] = useState("RUNNING");
+
+  const lastTimeRef = useRef(null);
+  const spawnTimerRef = useRef(0);
+
+  const spawnItem = () => {
+    const type = TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)];
+    const id = Math.random().toString();
+    setItems(prev => [...prev, {
+      id, type, 
+      x: Math.random() * (width - 60), 
+      y: -60, 
+      speed: 100 + Math.random() * 50
+    }]);
+  };
+
+  useEffect(() => {
+    const loop = (timeNow) => {
+      if (!lastTimeRef.current) lastTimeRef.current = timeNow;
+      const dt = Math.min((timeNow - lastTimeRef.current) / 1000, 0.05);
+      lastTimeRef.current = timeNow;
+
+      if (phase === "RUNNING") {
+        setTime(t => {
+          const next = t - dt;
+          if (next <= 0) setPhase("ENDED");
+          return next;
+        });
+
+        spawnTimerRef.current -= dt;
+        if (spawnTimerRef.current <= 0) {
+          spawnItem();
+          spawnTimerRef.current = Math.max(0.6, 2 - (score * 0.01));
+        }
+
+        setItems(prev => {
+          const nextItems = [];
+          for (let item of prev) {
+            if (!item.dragging) {
+              item.y += item.speed * dt;
+            }
+            if (item.y < height) {
+              nextItems.push(item);
+            } else {
+              // Can kaybı
+              setLives(l => Math.max(0, l - 1));
+            }
+          }
+          return nextItems;
+        });
+        
+        if (lives <= 0) setPhase("ENDED");
+      }
+      requestAnimationFrame(loop);
+    };
+    const raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [phase, score, lives]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
+      
+      {/* Oyun Alanı */}
+      <View style={{ flex: 1 }}>
+        {items.map(item => (
+          <DraggableItem 
+            key={item.id} 
+            item={item} 
+            onDrop={(x, y, type) => {
+              // Kutu kontrolü
+              const binWidth = width / 5;
+              const binIndex = Math.floor(x / binWidth);
+              if (binIndex >= 0 && binIndex < 5) {
+                const targetType = TRASH_TYPES[binIndex];
+                if (targetType === type) {
+                  setScore(s => s + 10);
+                  setItems(prev => prev.filter(i => i.id !== item.id));
+                } else {
+                  setLives(l => l - 1);
+                  setItems(prev => prev.filter(i => i.id !== item.id));
+                }
+              }
+            }}
+          />
+        ))}
+      </View>
+
+      {/* Kovalar */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 20, paddingHorizontal: 10 }}>
+        {TRASH_TYPES.map(type => (
+          <Bin3D key={type} type={type} style={{ width: width / 6 }} />
+        ))}
+      </View>
+
+      {phase === "ENDED" && <GameOverModal score={score} onRestart={() => {
+        setScore(0); setLives(3); setTime(60); setItems([]); setPhase("RUNNING");
+      }} onMenu={onBack} />}
+    </View>
+  );
+}
+
+// Sürüklenebilir Öğe Bileşeni
+const DraggableItem = ({ item, onDrop }) => {
+  const pan = useRef(new Animated.ValueXY({ x: item.x, y: item.y })).current;
+  const [dragging, setDragging] = useState(false);
+
+  // item.y değiştiğinde animasyonu güncelle (sürüklenmiyorsa)
+  useEffect(() => {
+    if (!dragging) {
+      pan.setValue({ x: item.x, y: item.y });
+    }
+  }, [item.x, item.y, dragging]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        setDragging(true);
+        pan.setOffset({
+          x: pan.x._value,
+          y: pan.y._value
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: (e, gesture) => {
+        setDragging(false);
+        pan.flattenOffset();
+        onDrop(gesture.moveX, gesture.moveY, item.type);
+      }
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={{
+        position: 'absolute',
+        transform: pan.getTranslateTransform(),
+        zIndex: dragging ? 100 : 1
+      }}
+    >
+      <View style={styles.wasteBubble}>
+        <Text style={{ fontSize: 30 }}>{TRASH_CONFIG[item.type].icon}</Text>
+      </View>
+    </Animated.View>
+  );
+};
+
+
+// --- MOD 2: SAPAN (BASKETBOL) ---
+function CleanupGameSlingshot({ onBack }) {
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height > width;
   
-  // HUD
-  hudRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: (StatusBar.currentHeight || 40) + 10,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+  // Oyun boyutları
+  const gameW = isPortrait ? height : width;
+  const gameH = isPortrait ? width : height;
+
+  // Fizik Ayarları (Kullanıcının istediği koddan uyarlandı)
+  const SLING_CONFIG = {
+    maxDrag: 150,
+    powerScale: 12, // Hız çarpanı
+    gravity: 1200,  // Yerçekimi
+    anchorX: 120,   // Sapan X
+    anchorY: gameH - 200 // Sapan Y
+  };
+
+  const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(3);
+  const [time, setTime] = useState(60);
+  const [phase, setPhase] = useState("RUNNING");
+  
+  const [projectile, setProjectile] = useState(null);
+  const [currentType, setCurrentType] = useState(TRASH_TYPES[0]);
+  const [dragStart, setDragStart] = useState(null);
+  const [dragCurrent, setDragCurrent] = useState(null);
+
+  // State Ref
+  const stateRef = useRef({ phase, projectile, currentType, isPortrait });
+  useEffect(() => {
+    stateRef.current = { phase, projectile, currentType, isPortrait };
+  }, [phase, projectile, currentType, isPortrait]);
+
+  // Kovalar (Sağ tarafta, piramit/sıralı düzen)
+  const startBinX = gameW * 0.65;
+  const BINS = [
+    { type: "plastic", x: startBinX, y: gameH * 0.65 },
+    { type: "paper", x: startBinX + 90, y: gameH * 0.65 },
+    { type: "glass", x: startBinX + 180, y: gameH * 0.65 },
+    { type: "metal", x: startBinX + 45, y: gameH * 0.45 },
+    { type: "organic", x: startBinX + 135, y: gameH * 0.45 },
+  ];
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => {
+        const { phase, projectile } = stateRef.current;
+        return phase === "RUNNING" && !projectile;
+      },
+      onPanResponderGrant: (evt) => {
+        setDragStart({ x: SLING_CONFIG.anchorX, y: SLING_CONFIG.anchorY });
+        setDragCurrent({ x: SLING_CONFIG.anchorX, y: SLING_CONFIG.anchorY });
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const { isPortrait } = stateRef.current;
+        let { dx, dy } = gestureState;
+        if (isPortrait) { const temp = dx; dx = dy; dy = -temp; }
+        
+        // Mesafe sınırlama
+        const dist = Math.hypot(dx, dy);
+        if (dist > SLING_CONFIG.maxDrag) {
+          const ratio = SLING_CONFIG.maxDrag / dist;
+          dx *= ratio; dy *= ratio;
+        }
+        setDragCurrent({ x: SLING_CONFIG.anchorX + dx, y: SLING_CONFIG.anchorY + dy });
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const { currentType, isPortrait } = stateRef.current;
+        let { dx, dy } = gestureState;
+        if (isPortrait) { const temp = dx; dx = dy; dy = -temp; }
+        
+        const dist = Math.hypot(dx, dy);
+        // Eğer çok az çekildiyse iptal et
+        if (dist < 20) {
+          setDragStart(null); setDragCurrent(null);
+          return;
+        }
+
+        // Sınırla
+        if (dist > SLING_CONFIG.maxDrag) {
+          const r = SLING_CONFIG.maxDrag/dist; dx*=r; dy*=r;
+        }
+
+        // Fırlatma (Ters vektör * powerScale)
+        const vx = -dx * SLING_CONFIG.powerScale;
+        const vy = -dy * SLING_CONFIG.powerScale;
+
+        setProjectile({
+          x: SLING_CONFIG.anchorX, y: SLING_CONFIG.anchorY,
+          vx, vy,
+          type: currentType, active: true
+        });
+        setCurrentType(TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)]);
+        setDragStart(null); setDragCurrent(null);
+      }
+    })
+  ).current;
+
+  // Fizik Döngüsü
+  useEffect(() => {
+    if (phase !== "RUNNING") return;
+
+    let raf;
+    let lastT = 0;
+    
+    const loop = (t) => {
+      raf = requestAnimationFrame(loop);
+      
+      if (!lastT) { lastT = t; return; }
+      const dt = Math.min((t - lastT)/1000, 0.05);
+      lastT = t;
+
+      // StateRef'ten güncel veriyi al (Closure sorununu çözer)
+      const { projectile: p, lives: l } = stateRef.current;
+
+      if (p && p.active) {
+        let { x, y, vx, vy } = p;
+        
+        // Fizik
+        vy += SLING_CONFIG.gravity * dt;
+        x += vx * dt;
+        y += vy * dt;
+
+        // Çarpışma
+        let hit = false;
+        let newScore = 0;
+        let lifeLost = false;
+
+        for (let bin of BINS) {
+          if (Math.hypot(x - bin.x, y - bin.y) < 45) {
+            if (vy > 0) { // Sadece düşerken
+              hit = true;
+              if (bin.type === p.type) newScore = 15;
+              else lifeLost = true;
+              break;
+            }
+          }
+        }
+
+        if (hit) {
+          if (newScore > 0) setScore(s => s + newScore);
+          if (lifeLost) setLives(prev => prev - 1);
+          setProjectile(null); // Yok et
+        } else if (x > gameW + 50 || y > gameH + 50 || x < -50) {
+           setProjectile(null); // Ekran dışı
+        } else {
+           // Güncelle
+           setProjectile({ ...p, x, y, vx, vy });
+        }
+      }
+
+      // Zaman
+      setTime(prev => {
+        const n = prev - dt;
+        if (n <= 0) {
+            setPhase("ENDED");
+            return 0;
+        }
+        return n;
+      });
+      
+      if (l <= 0) setPhase("ENDED");
+    };
+
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [phase, gameW, gameH]); // Projectile bağımlılığı kaldırıldı!
+
+  const containerStyle = isPortrait ? {
+    width: gameW, height: gameH,
+    position: 'absolute',
+    top: (height - gameH) / 2, left: (width - gameW) / 2,
+    transform: [{ rotate: '90deg' }]
+  } : { width: gameW, height: gameH };
+
+  // Gelişmiş Nişan Oku ve Rota
+  const renderTrajectory = () => {
+    if (!dragCurrent) return null;
+    
+    const dx = dragCurrent.x - SLING_CONFIG.anchorX;
+    const dy = dragCurrent.y - SLING_CONFIG.anchorY;
+    
+    // Fırlatma vektörü (Ters)
+    const aimX = -dx;
+    const aimY = -dy;
+    
+    const dist = Math.hypot(aimX, aimY);
+    const powerRatio = Math.min(dist / SLING_CONFIG.maxDrag, 1.0);
+    
+    // Renk (Yeşil -> Kırmızı)
+    const hue = 120 - (powerRatio * 120);
+    const color = `hsl(${hue}, 100%, 50%)`;
+    
+    // 1. Ok Çizimi
+    const angle = Math.atan2(aimY, aimX) * 180 / Math.PI;
+    const arrowLen = 40 + (powerRatio * 100);
+
+    // 2. Rota Noktaları (Trajectory Dots)
+    const dots = [];
+    const vx = aimX * SLING_CONFIG.powerScale;
+    const vy = aimY * SLING_CONFIG.powerScale;
+    
+    for(let i=1; i<=8; i++) {
+      const t = i * 0.15; // Zaman adımları
+      const tx = SLING_CONFIG.anchorX + vx * t;
+      const ty = SLING_CONFIG.anchorY + vy * t + 0.5 * SLING_CONFIG.gravity * t * t;
+      
+      dots.push(
+        <View key={`dot-${i}`} style={{
+          position: 'absolute', left: tx - 4, top: ty - 4,
+          width: 8, height: 8, borderRadius: 4,
+          backgroundColor: 'rgba(255,255,255,0.6)'
+        }} />
+      );
+    }
+
+    return (
+      <>
+        {/* Ok */}
+        <View style={{
+          position: 'absolute',
+          left: SLING_CONFIG.anchorX, top: SLING_CONFIG.anchorY,
+          width: arrowLen, height: 0,
+          transform: [{ rotate: `${angle}deg` }, { translateX: 0 }] // Merkezden başlasın
+        }}>
+           <View style={{
+             position: 'absolute', left: 0, top: -3,
+             width: arrowLen, height: 6,
+             backgroundColor: color, borderRadius: 3,
+             opacity: 0.8
+           }} />
+           {/* Ok Ucu */}
+           <View style={{
+             position: 'absolute', right: -5, top: -8,
+             width: 0, height: 0,
+             borderTopWidth: 8, borderBottomWidth: 8, borderLeftWidth: 14,
+             borderTopColor: 'transparent', borderBottomColor: 'transparent',
+             borderLeftColor: color
+           }} />
+        </View>
+        {/* Rota Noktaları */}
+        {dots}
+      </>
+    );
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#000' }}>
+      <View style={containerStyle}>
+        <OceanBackground />
+        <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
+        
+        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+          {/* Kovalar */}
+          {BINS.map((bin, i) => (
+            <View key={i} style={{ position: 'absolute', left: bin.x - 35, top: bin.y - 35 }}>
+              <Bin3D type={bin.type} style={{ width: 70, height: 70 }} />
+            </View>
+          ))}
+
+          {/* Rota ve Ok */}
+          {renderTrajectory()}
+
+          {/* Sapan Gövdesi */}
+          <View style={{ 
+            position: 'absolute', 
+            left: SLING_CONFIG.anchorX - 5, top: SLING_CONFIG.anchorY, 
+            width: 10, height: 80, backgroundColor: '#5D4037' 
+          }} />
+          
+          {/* Lastikler */}
+          {dragCurrent && (
+            <View style={{
+              position: 'absolute', left: SLING_CONFIG.anchorX, top: SLING_CONFIG.anchorY,
+              width: Math.hypot(dragCurrent.x - SLING_CONFIG.anchorX, dragCurrent.y - SLING_CONFIG.anchorY),
+              height: 4, backgroundColor: '#3E2723',
+              transformOrigin: 'left center',
+              transform: [{ rotate: `${Math.atan2(dragCurrent.y - SLING_CONFIG.anchorY, dragCurrent.x - SLING_CONFIG.anchorX)}rad` }]
+            }} />
+          )}
+
+          {/* Top (Sapanın ucunda veya havada) */}
+          {dragCurrent ? (
+            <View style={{ position: 'absolute', left: dragCurrent.x - 20, top: dragCurrent.y - 20 }}>
+              <View style={styles.wasteBubble}><Text style={{fontSize:24}}>{TRASH_CONFIG[currentType].icon}</Text></View>
+            </View>
+          ) : (
+            !projectile && (
+              <View style={{ position: 'absolute', left: SLING_CONFIG.anchorX - 20, top: SLING_CONFIG.anchorY - 20 }}>
+                <View style={styles.wasteBubble}><Text style={{fontSize:24}}>{TRASH_CONFIG[currentType].icon}</Text></View>
+              </View>
+            )
+          )}
+
+          {/* Uçan Mermi */}
+          {projectile && (
+            <View style={{ position: 'absolute', left: projectile.x - 20, top: projectile.y - 20 }}>
+              <View style={styles.wasteBubble}><Text style={{fontSize:24}}>{TRASH_CONFIG[projectile.type].icon}</Text></View>
+            </View>
+          )}
+        </View>
+
+        {phase === "ENDED" && (
+          <View style={[styles.overlay, { transform: [{ rotate: '-90deg' }] }]}>
+             <GameOverModal score={score} onRestart={() => {
+               setScore(0); setLives(3); setTime(60); setPhase("RUNNING");
+             }} onMenu={onBack} />
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// --- MOD 3: ŞERİT (LANE SWAP) ---
+function CleanupGameLaneSwap({ onBack }) {
+  const { width, height } = useWindowDimensions();
+  const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(3);
+  const [time, setTime] = useState(60);
+  const [phase, setPhase] = useState("RUNNING");
+  
+  const [binOrder, setBinOrder] = useState([...TRASH_TYPES]);
+  const [selectedLane, setSelectedLane] = useState(null);
+  const [items, setItems] = useState([]);
+  
+  const spawnTimerRef = useRef(0);
+  const lastTimeRef = useRef(null);
+
+  const handleLanePress = (index) => {
+    if (selectedLane === null) setSelectedLane(index);
+    else {
+      if (selectedLane !== index) {
+        const newOrder = [...binOrder];
+        const temp = newOrder[selectedLane];
+        newOrder[selectedLane] = newOrder[index];
+        newOrder[index] = temp;
+        setBinOrder(newOrder);
+      }
+      setSelectedLane(null);
+    }
+  };
+
+  useEffect(() => {
+    const loop = (t) => {
+      if (!lastTimeRef.current) lastTimeRef.current = t;
+      const dt = Math.min((t - lastTimeRef.current)/1000, 0.05);
+      lastTimeRef.current = t;
+
+      if (phase === "RUNNING") {
+        setTime(prev => {
+          const n = prev - dt;
+          if (n <= 0) setPhase("ENDED");
+          return n;
+        });
+
+        spawnTimerRef.current -= dt;
+        if (spawnTimerRef.current <= 0) {
+          const lane = Math.floor(Math.random() * 5);
+          const type = TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)];
+          setItems(p => [...p, { id: Math.random().toString(), type, lane, y: -60, speed: 150 + score }]);
+          spawnTimerRef.current = Math.max(0.5, 1.5 - score * 0.01);
+        }
+
+        setItems(prev => {
+          const next = [];
+          for (let item of prev) {
+            item.y += item.speed * dt;
+            if (item.y > height - 150) {
+              if (binOrder[item.lane] === item.type) setScore(s => s + 10);
+              else setLives(l => l - 1);
+            } else {
+              next.push(item);
+            }
+          }
+          return next;
+        });
+        if (lives <= 0) setPhase("ENDED");
+      }
+      requestAnimationFrame(loop);
+    };
+    const raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [phase, binOrder, score, lives, height]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <OceanBackground />
+      <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
+      
+      {/* Şeritler */}
+      <View style={{ flexDirection: 'row', flex: 1 }}>
+        {[0,1,2,3,4].map(i => (
+          <View key={i} style={{ flex: 1, borderRightWidth: i<4?1:0, borderColor: 'rgba(255,255,255,0.1)' }} />
+        ))}
+      </View>
+
+      {/* Düşenler */}
+      {items.map(item => (
+        <View key={item.id} style={{
+          position: 'absolute',
+          left: (item.lane * (width/5)) + (width/10) - 25,
+          top: item.y,
+        }}>
+          <View style={styles.wasteBubble}><Text style={{fontSize:24}}>{TRASH_CONFIG[item.type].icon}</Text></View>
+        </View>
+      ))}
+
+      {/* Kovalar */}
+      <View style={{ position: 'absolute', bottom: 20, left: 0, right: 0, flexDirection: 'row', height: 100, alignItems: 'flex-end' }}>
+        {binOrder.map((type, i) => (
+          <View key={i} style={{ flex: 1, padding: 2 }}>
+            <Bin3D 
+              type={type} 
+              isSelected={selectedLane === i} 
+              onClick={() => handleLanePress(i)}
+              style={{ width: '100%' }}
+            />
+          </View>
+        ))}
+      </View>
+
+      {phase === "ENDED" && <GameOverModal score={score} onRestart={() => {
+        setScore(0); setLives(3); setTime(60); setItems([]); setPhase("RUNNING");
+      }} onMenu={onBack} />}
+    </View>
+  );
+}
+
+// --- ORTAK MODAL ---
+const GameOverModal = ({ score, onRestart, onMenu }) => (
+  <View style={styles.overlay}>
+    <View style={styles.modalCard}>
+      <Text style={{ color: 'white', fontSize: 24, marginBottom: 10 }}>Oyun Bitti</Text>
+      <Text style={{ color: '#ccc', fontSize: 16 }}>Toplam Skor</Text>
+      <Text style={{ color: COLORS.accent, fontSize: 48, fontWeight: '900', marginVertical: 20 }}>{score}</Text>
+      <TouchableOpacity style={styles.btnAction} onPress={onRestart}>
+        <Text style={styles.btnText}>Tekrar Oyna</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.btnAction, styles.btnSecondary]} onPress={onMenu}>
+        <Text style={styles.btnText}>Ana Menü</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+const styles = StyleSheet.create({
+  // --- UI STYLES ---
+  hudBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 15,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 40,
     zIndex: 100,
   },
-  hudGroup: {
-    flexDirection: "row",
+  glassPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 30, 60, 0.6)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
     gap: 8,
   },
-  hudItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.15)",
-  },
-  hudIcon: {
-    fontSize: 16,
-    marginRight: 6,
-  },
-  hudText: {
-    fontWeight: "800",
-    color: "#E0F2FE",
-    fontSize: 15,
-    fontVariant: ["tabular-nums"],
-  },
-  pauseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  pauseLabel: {
-    fontWeight: "900",
-    color: "#FFFFFF",
-    fontSize: 14,
-  },
+  hudIcon: { fontSize: 20, color: '#fff' },
+  hudText: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
 
-  // Play Area
-  playArea: {
+  // --- MENU STYLES ---
+  menuContainer: {
     flex: 1,
-    position: "relative",
-    overflow: "hidden",
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+    padding: 20,
   },
-  
-  // Game Elements
-  shark: {
-    position: "absolute",
-    width: 80,
-    height: 60,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 20,
+  menuTitle: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 20,
+    textShadowColor: COLORS.bgMid,
+    textShadowRadius: 10,
   },
-  sharkBody: {
-    fontSize: 50,
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-  },
-  
-  trash: {
-    position: "absolute",
-    width: 70,
-    height: 70,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 30,
-  },
-  trashBubble: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.5)",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  trashEmoji: {
-    fontSize: 30,
-  },
-  
-  // Bins Area
-  boat: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: SCREEN_HEIGHT * 0.22,
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  boatBody: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "transparent", // Removed boat look, now just bins on sea floor/dock
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "flex-end",
-    paddingBottom: 20,
-    paddingHorizontal: 10,
-  },
-  binWrapper: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-    width: SCREEN_WIDTH / 5.5,
-  },
-  bin: {
-    width: 60,
-    height: 70,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 0,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-    marginBottom: 5,
-  },
-  binLid: {
-    position: "absolute",
-    top: -5,
-    width: 64,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.3)",
-  },
-  binIcon: {
-    fontSize: 28,
-    marginBottom: 2,
-  },
-  binLabel: {
-    fontWeight: "800",
-    color: "#FFFFFF",
-    fontSize: 10,
-    textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-
-  // Bottom Bar
-  bottomBar: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 15,
-    paddingBottom: 20,
-    paddingTop: 10,
-  },
-  secondaryBtn: {
-    backgroundColor: "rgba(255,255,255,0.15)",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 30,
-    alignItems: "center",
+  modeCard: {
+    width: '100%',
+    maxWidth: 400,
+    height: 100,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    flexDirection: "row",
-    gap: 6,
+    borderColor: 'rgba(255,255,255,0.3)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    gap: 20,
   },
-  secondaryText: {
-    fontWeight: "700",
-    color: "#FFFFFF",
-    fontSize: 14,
+  cardIconBg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.accent },
+  cardDesc: { fontSize: 14, color: '#ddd', marginTop: 4 },
+
+  // --- GAME ELEMENTS ---
+  binWrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  binSelected: {
+    transform: [{ scale: 1.1 }],
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+  },
+  binRim: {
+    width: '100%',
+    height: 15,
+    borderRadius: 20,
+    borderWidth: 3,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    zIndex: 2,
+    marginBottom: -8,
+  },
+  binBody: {
+    width: '90%',
+    height: 60,
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
+    borderWidth: 2,
+    borderTopWidth: 0,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  binBodyGradient: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.8,
+  },
+  binSticker: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  binLabelText: { fontSize: 10, fontWeight: 'bold', color: '#333' },
+
+  wasteBubble: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
   },
 
-  // Overlay
+  // --- MODAL ---
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(15, 23, 42, 0.85)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 200,
-    backdropFilter: "blur(10px)", // Works on some versions/web
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
   },
-  overlayCard: {
-    width: SCREEN_WIDTH * 0.85,
-    backgroundColor: "#1e293b",
+  modalCard: {
+    width: '80%',
+    backgroundColor: '#1e293b',
     borderRadius: 30,
     padding: 30,
-    gap: 16,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
-    elevation: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#334155',
   },
-  overlayTitle: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#38bdf8",
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  overlayText: {
-    color: "#cbd5e1",
-    textAlign: "center",
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: "500",
-  },
-  cta: {
-    backgroundColor: "#0ea5e9",
-    paddingHorizontal: 40,
-    paddingVertical: 16,
-    borderRadius: 999,
-    shadowColor: "#0ea5e9",
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
-    elevation: 10,
+  btnAction: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 50,
     marginTop: 10,
+    width: '100%',
+    alignItems: 'center',
   },
-  ctaText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
+  btnSecondary: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  btnText: {
+    color: 'white',
     fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 

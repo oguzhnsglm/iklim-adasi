@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View, Platform, PanResponder, useWindowDimensions, Animated, Easing, ScrollView } from "react-native";
+import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View, Platform, PanResponder, useWindowDimensions, Animated, Easing } from "react-native";
+import KeyboardScrollView from '../components/KeyboardScrollView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import soundManager from '../utils/sounds';
 import MemoryGame from './MemoryGame';
@@ -254,7 +255,7 @@ function ModeSelectionScreen({ onSelectMode, onExit }) {
         </TouchableOpacity>
       </View>
       
-      <ScrollView 
+      <KeyboardScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={true}
@@ -300,7 +301,7 @@ function ModeSelectionScreen({ onSelectMode, onExit }) {
             <Text style={styles.cardDesc}>Kartları eşleştir, hafızanı güçlendir!</Text>
           </View>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardScrollView>
     </View>
   );
 }

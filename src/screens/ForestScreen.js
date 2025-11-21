@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, Animated, Image } from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View, Modal, Animated, Image } from "react-native";
+import KeyboardScrollView from '../components/KeyboardScrollView';
 import { THEME } from "../theme";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -317,7 +318,9 @@ export default function ForestScreen({ totalScore, onBack }) {
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
+      <KeyboardScrollView 
+        style={styles.content}
+      >
         {/* Orman Grid */}
         <View style={styles.forestSection}>
           <Text style={styles.sectionTitle}>Orman Alanı ({gridSize}x{gridSize})</Text>
@@ -351,7 +354,7 @@ export default function ForestScreen({ totalScore, onBack }) {
             <Text style={styles.shopButtonText}>🏪 Ağaç Mağazası</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardScrollView>
 
       {/* Ağaç Mağazası Modal */}
       <Modal
@@ -380,7 +383,9 @@ export default function ForestScreen({ totalScore, onBack }) {
               <Text style={styles.shopScoreValue}>⭐ {currentScore}</Text>
             </View>
 
-            <ScrollView style={styles.shopContent}>
+            <KeyboardScrollView 
+              style={styles.shopContent}
+            >
               {Object.values(TREE_TYPES).map(tree => {
                 const canAfford = currentScore >= tree.cost;
                 const rarityColor = 
@@ -430,7 +435,7 @@ export default function ForestScreen({ totalScore, onBack }) {
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
+            </KeyboardScrollView>
 
             {/* Ağacı Dik Butonu */}
             {selectedTree && (

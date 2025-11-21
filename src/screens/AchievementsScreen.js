@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import KeyboardScrollView from '../components/KeyboardScrollView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { THEME } from '../theme';
 
@@ -104,7 +105,10 @@ export default function AchievementsScreen({ onBack }) {
       </View>
 
       {/* Badges Grid */}
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.badgesGrid}>
+      <KeyboardScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.badgesGrid}
+      >
         {BADGES.map((badge) => {
           const earned = isBadgeEarned(badge.id);
           const progress = Math.min((totalTrees / badge.requirement) * 100, 100);
@@ -142,7 +146,7 @@ export default function AchievementsScreen({ onBack }) {
             </View>
           );
         })}
-      </ScrollView>
+      </KeyboardScrollView>
     </View>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View, ScrollView } from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import KeyboardScrollView from '../components/KeyboardScrollView';
 import { THEME } from "../theme";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ForestScreen from './ForestScreen';
@@ -98,7 +99,7 @@ export default function HomeScreen({ onPlay }) {
     <View style={styles.root}>
       <NatureSplash />
 
-      <ScrollView 
+      <KeyboardScrollView 
         style={{ flex: 1 }} 
         contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
@@ -161,7 +162,7 @@ export default function HomeScreen({ onPlay }) {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+      </KeyboardScrollView>
     </View>
   );
 }

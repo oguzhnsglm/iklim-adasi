@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import KeyboardScrollView from '../components/KeyboardScrollView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { THEME } from '../theme';
 
@@ -66,7 +67,10 @@ export default function ProfileScreen({ onBack }) {
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <KeyboardScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.content}
+      >
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
@@ -163,7 +167,7 @@ export default function ProfileScreen({ onBack }) {
             );
           })}
         </View>
-      </ScrollView>
+      </KeyboardScrollView>
     </View>
   );
 }

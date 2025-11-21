@@ -1,12 +1,12 @@
-// Su ve doğa temalı renk paleti
+// Doğa ve orman temalı renk paleti
 export const THEME = {
-  background: "#E0F7FA",    // Açık su mavisi
-  deepSea: "#0F4C75",       // Koyu deniz mavisi
-  foam: "#BAE6FD",          // Köpük mavisi
-  wave: "#7DD3FC",          // Dalga mavisi
-  tide: "#5EEAD4",          // Turkuaz
-  sand: "#FDE68A",          // Kum sarısı
-  accent: "#0EA5E9",        // Vurgu mavisi
-  textDark: "#082032",      // Koyu metin
-  textLight: "#F8FAFC",     // Açık metin
+  background: "#E8F5E9",    // Açık yeşil
+  deepSea: "#1B5E20",       // Koyu orman yeşili
+  foam: "#C8E6C9",          // Açık yosun yeşili
+  wave: "#66BB6A",          // Yaprak yeşili
+  tide: "#81C784",          // Çimen yeşili
+  sand: "#A5D6A7",          // Mint yeşili
+  accent: "#4CAF50",        // Vurgu yeşili
+  textDark: "#1B5E20",      // Koyu metin
+  textLight: "#F1F8E9",     // Açık metin
 };

@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View, Platform, PanResponder, useWindowDimensions, Animated, Easing } from "react-native";
+import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View, Platform, PanResponder, useWindowDimensions, Animated, Easing, ScrollView } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import soundManager from '../utils/sounds';
+import MemoryGame from './MemoryGame';
 
 // --- PREMIUM TEMA RENKLERİ ---
 const COLORS = {
-  bgDeep: "#001e36",
-  bgMid: "#004e7a",
+  bgDeep: "#1a4d2e",
+  bgMid: "#2d5f3f",
   accent: "#ffd700",
   glass: "rgba(255, 255, 255, 0.15)",
   plastic: "#fbbf24",
@@ -17,36 +20,37 @@ const COLORS = {
 
 const TRASH_TYPES = ["plastic", "paper", "glass", "metal", "organic"];
 const TRASH_CONFIG = {
-  plastic: { id: 'plastic', icon: '🥤', label: 'Plastik', color: COLORS.plastic },
-  paper:   { id: 'paper',   icon: '🗞️', label: 'Kağıt',   color: COLORS.paper },
-  glass:   { id: 'glass',   icon: '🍾', label: 'Cam',     color: COLORS.glassBin },
-  metal:   { id: 'metal',   icon: '🔋', label: 'Metal',   color: COLORS.metal },
-  organic: { id: 'organic', icon: '🦴', label: 'Evsel',   color: COLORS.organic }
+  plastic: { id: 'plastic', icon: '🥤', label: 'PLASTİK', color: COLORS.plastic, bgColor: '#FEF3C7' },
+  paper:   { id: 'paper',   icon: '📄', label: 'KAĞIT',   color: COLORS.paper, bgColor: '#DBEAFE' },
+  glass:   { id: 'glass',   icon: '🍾', label: 'CAM',     color: COLORS.glassBin, bgColor: '#D1FAE5' },
+  metal:   { id: 'metal',   icon: '⚙️', label: 'METAL',   color: COLORS.metal, bgColor: '#FECACA' },
+  organic: { id: 'organic', icon: '🍂', label: 'ORGANİK', color: COLORS.organic, bgColor: '#FED7AA' }
 };
 
 // --- YARDIMCI BİLEŞENLER ---
 
-// Arka Plan Efektleri (God Rays & Bubbles)
-const OceanBackground = () => {
+// Arka Plan Efektleri (Orman & Hayvanlar)
+const NatureBackground = () => {
   const { width, height } = useWindowDimensions();
   
-  // Baloncuklar
-  const bubbles = useRef([...Array(15)].map(() => ({
+  // Uçan yapraklar ve hayvanlar
+  const elements = useRef([...Array(15)].map(() => ({
     anim: new Animated.Value(0),
     left: Math.random() * width,
-    size: Math.random() * 20 + 5,
-    speed: Math.random() * 5000 + 5000,
-    delay: Math.random() * 5000
+    size: Math.random() * 20 + 10,
+    speed: Math.random() * 8000 + 6000,
+    delay: Math.random() * 5000,
+    isAnimal: Math.random() > 0.7 // %30 hayvan, %70 yaprak
   }))).current;
 
   useEffect(() => {
-    bubbles.forEach(b => {
+    elements.forEach(e => {
       Animated.loop(
         Animated.sequence([
-          Animated.delay(b.delay),
-          Animated.timing(b.anim, {
+          Animated.delay(e.delay),
+          Animated.timing(e.anim, {
             toValue: 1,
-            duration: b.speed,
+            duration: e.speed,
             easing: Easing.linear,
             useNativeDriver: true
           })
@@ -57,7 +61,7 @@ const OceanBackground = () => {
 
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.bgDeep, overflow: 'hidden' }]}>
-      {/* Radyal Gradyan benzeri bir efekt için merkezde aydınlık bir daire */}
+      {/* Orman gradyan efekti */}
       <View style={{
         position: 'absolute',
         top: -height * 0.2,
@@ -66,18 +70,18 @@ const OceanBackground = () => {
         height: width * 1.4,
         borderRadius: width,
         backgroundColor: COLORS.bgMid,
-        opacity: 0.4,
+        opacity: 0.5,
         transform: [{ scaleX: 1.5 }]
       }} />
 
-      {/* God Rays (Işık Hüzmeleri) */}
+      {/* Güneş ışınları */}
       <View style={{
         position: 'absolute',
         top: -100,
         left: width * 0.2,
         width: 60,
         height: height * 1.5,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: 'rgba(255,255,255,0.08)',
         transform: [{ rotate: '25deg' }]
       }} />
       <View style={{
@@ -86,33 +90,57 @@ const OceanBackground = () => {
         left: width * 0.5,
         width: 80,
         height: height * 1.5,
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
         transform: [{ rotate: '20deg' }]
       }} />
 
-      {/* Baloncuklar */}
-      {bubbles.map((b, i) => (
+      {/* Uçan yapraklar ve hayvanlar */}
+      {elements.map((e, i) => (
         <Animated.View
           key={i}
           style={{
             position: 'absolute',
-            left: b.left,
+            left: e.left,
             bottom: -50,
-            width: b.size,
-            height: b.size,
-            borderRadius: b.size / 2,
-            backgroundColor: 'rgba(255,255,255,0.15)',
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.3)',
             transform: [{
-              translateY: b.anim.interpolate({
+              translateY: e.anim.interpolate({
                 inputRange: [0, 1],
                 outputRange: [0, -height - 100]
               })
+            }, {
+              rotate: e.anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0deg', '360deg']
+              })
             }]
           }}
-        />
+        >
+          <Text style={{ fontSize: e.size }}>
+            {e.isAnimal ? (Math.random() > 0.5 ? '🦋' : '🐦') : '🍃'}
+          </Text>
+        </Animated.View>
       ))}
+
+      {/* Alt kısımda ağaçlar */}
+      <View style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 80,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'flex-end',
+        opacity: 0.3
+      }}>
+        <Text style={{ fontSize: 50 }}>🌲</Text>
+        <Text style={{ fontSize: 40 }}>🦌</Text>
+        <Text style={{ fontSize: 50 }}>🌳</Text>
+        <Text style={{ fontSize: 45 }}>🦊</Text>
+        <Text style={{ fontSize: 50 }}>🌲</Text>
+        <Text style={{ fontSize: 40 }}>🐿️</Text>
+        <Text style={{ fontSize: 50 }}>🌳</Text>
+      </View>
     </View>
   );
 };
@@ -136,41 +164,81 @@ const Bin3D = ({ type, style, label, icon, isSelected, onClick }) => {
   );
 };
 
+// --- TUTORIAL MODAL (ORTAK) ---
+const TutorialModal = ({ title, instructions, onStart }) => (
+  <View style={styles.overlay}>
+    <View style={[styles.modalCard, { maxWidth: 500 }]}>
+      <Text style={{ color: '#ffd700', fontSize: 28, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' }}>
+        🎮 {title.toUpperCase()}
+      </Text>
+      
+      <View style={{ alignItems: 'flex-start', width: '100%', gap: 12 }}>
+        {instructions.map((instruction, index) => (
+          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 24, minWidth: 35, textAlign: 'center' }}>
+              {instruction.split(' ')[0]}
+            </Text>
+            <Text style={{ color: '#fff', fontSize: 15, flex: 1 }}>
+              {instruction.split(' ').slice(1).join(' ')}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <TouchableOpacity 
+        style={[styles.btnAction, { marginTop: 30, width: '100%', backgroundColor: '#4ade80' }]} 
+        onPress={() => {
+          soundManager.playStart();
+          onStart();
+        }}
+      >
+        <Text style={[styles.btnText, { fontSize: 18 }]}>🚀 Oyuna Başla</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
 // HUD (Skor Tablosu)
 const GameHUD = ({ score, time, lives, onBack }) => (
   <View style={styles.hudBar}>
-    <TouchableOpacity style={styles.glassPanel} onPress={onBack}>
-      <Text style={styles.hudIcon}>↩</Text>
-    </TouchableOpacity>
-    <View style={styles.glassPanel}>
-      <Text style={styles.hudIcon}>⭐</Text>
-      <Text style={styles.hudText}>{score}</Text>
+    <View style={{ flex: 1, flexDirection: 'row', gap: 10 }}>
+      <TouchableOpacity style={[styles.glassPanel, styles.backButton]} onPress={onBack}>
+        <Text style={styles.backIcon}>←</Text>
+        <Text style={styles.backText}>Geri</Text>
+      </TouchableOpacity>
     </View>
-    <View style={styles.glassPanel}>
-      <Text style={styles.hudIcon}>⏱️</Text>
-      <Text style={styles.hudText}>{Math.ceil(time)}</Text>
-    </View>
-    <View style={styles.glassPanel}>
-      <Text style={styles.hudIcon}>❤️</Text>
-      <Text style={styles.hudText}>{lives}</Text>
+    <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={styles.glassPanel}>
+        <Text style={styles.hudIcon}>⭐</Text>
+        <Text style={styles.hudText}>{score}</Text>
+      </View>
+      <View style={styles.glassPanel}>
+        <Text style={styles.hudIcon}>⏱️</Text>
+        <Text style={styles.hudText}>{Math.ceil(time)}</Text>
+      </View>
+      <View style={styles.glassPanel}>
+        <Text style={styles.hudIcon}>❤️</Text>
+        <Text style={styles.hudText}>{lives}</Text>
+      </View>
     </View>
   </View>
 );
 
 // --- ANA BİLEŞEN ---
 export default function CleanupGame({ onExit }) {
-  const [gameMode, setGameMode] = useState("SELECTION"); // SELECTION | CLASSIC | SLINGSHOT | LANE | SNAKE
+  const [gameMode, setGameMode] = useState("SELECTION"); // SELECTION | CLASSIC | SLINGSHOT | LANE | SNAKE | MEMORY
 
   return (
     <View style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" />
-      <OceanBackground />
+      <NatureBackground />
       
       {gameMode === "SELECTION" && <ModeSelectionScreen onSelectMode={setGameMode} onExit={onExit} />}
       {gameMode === "CLASSIC" && <CleanupGameClassic onBack={() => setGameMode("SELECTION")} />}
       {gameMode === "SLINGSHOT" && <CleanupGameSlingshot onBack={() => setGameMode("SELECTION")} />}
       {gameMode === "LANE" && <CleanupGameLaneSwap onBack={() => setGameMode("SELECTION")} />}
       {gameMode === "SNAKE" && <SnakeGame onBack={() => setGameMode("SELECTION")} />}
+      {gameMode === "MEMORY" && <MemoryGame onBack={() => setGameMode("SELECTION")} />}
     </View>
   );
 }
@@ -179,43 +247,60 @@ export default function CleanupGame({ onExit }) {
 function ModeSelectionScreen({ onSelectMode, onExit }) {
   return (
     <View style={styles.menuContainer}>
-      <Text style={styles.menuTitle}>OKYANUS{"\n"}<Text style={{ fontSize: 24, opacity: 0.8 }}>TEMİZLİĞİ</Text></Text>
+      <View style={styles.menuHeader}>
+        <TouchableOpacity style={[styles.glassPanel, styles.backButton]} onPress={onExit}>
+          <Text style={styles.backIcon}>←</Text>
+          <Text style={styles.backText}>Ana Menü</Text>
+        </TouchableOpacity>
+      </View>
       
-      <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("CLASSIC")}>
-        <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🚮</Text></View>
-        <View>
-          <Text style={styles.cardTitle}>Klasik Ayrıştırma</Text>
-          <Text style={styles.cardDesc}>Atıkları sürükle ve kutulara bırak.</Text>
-        </View>
-      </TouchableOpacity>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={true}
+      >
+        <Text style={styles.menuTitle}>DOĞAYI{"\n"}<Text style={{ fontSize: 24, opacity: 0.8 }}>KORU</Text></Text>
+        
+        <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("CLASSIC")}>
+          <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🚮</Text></View>
+          <View>
+            <Text style={styles.cardTitle}>Klasik Ayrıştırma</Text>
+            <Text style={styles.cardDesc}>Atıkları sürükle ve kutulara bırak.</Text>
+          </View>
+        </TouchableOpacity>
 
-      <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("SLINGSHOT")}>
-        <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🏀</Text></View>
-        <View>
-          <Text style={styles.cardTitle}>Sapan Basketi</Text>
-          <Text style={styles.cardDesc}>Çek, nişan al ve potaya basket at!</Text>
-        </View>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("SLINGSHOT")}>
+          <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🏀</Text></View>
+          <View>
+            <Text style={styles.cardTitle}>Sapan Basketi</Text>
+            <Text style={styles.cardDesc}>Çek, nişan al ve potaya basket at!</Text>
+          </View>
+        </TouchableOpacity>
 
-      <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("LANE")}>
-        <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🎹</Text></View>
-        <View>
-          <Text style={styles.cardTitle}>Şerit Değiştir</Text>
-          <Text style={styles.cardDesc}>Kutuların yerini değiştir, atığı yakala.</Text>
-        </View>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("LANE")}>
+          <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🎹</Text></View>
+          <View>
+            <Text style={styles.cardTitle}>Şerit Değiştir</Text>
+            <Text style={styles.cardDesc}>Kutuların yerini değiştir, atığı yakala.</Text>
+          </View>
+        </TouchableOpacity>
 
-      <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("SNAKE")}>
-        <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🐍</Text></View>
-        <View>
-          <Text style={styles.cardTitle}>Yılan Oyunu</Text>
-          <Text style={styles.cardDesc}>Atıkları topla, zararlılardan kaç!</Text>
-        </View>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("SNAKE")}>
+          <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🐍</Text></View>
+          <View>
+            <Text style={styles.cardTitle}>Yılan Oyunu</Text>
+            <Text style={styles.cardDesc}>Atıkları topla, zararlılardan kaç!</Text>
+          </View>
+        </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.glassPanel, { marginTop: 20 }]} onPress={onExit}>
-        <Text style={styles.hudText}>Ana Menüye Dön</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("MEMORY")}>
+          <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🧩</Text></View>
+          <View>
+            <Text style={styles.cardTitle}>Hafıza Oyunu</Text>
+            <Text style={styles.cardDesc}>Kartları eşleştir, hafızanı güçlendir!</Text>
+          </View>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 }
@@ -225,9 +310,9 @@ function CleanupGameClassic({ onBack }) {
   const { width, height } = useWindowDimensions();
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
-  const [time, setTime] = useState(60);
+  const [time, setTime] = useState(120);
   const [items, setItems] = useState([]);
-  const [phase, setPhase] = useState("RUNNING");
+  const [phase, setPhase] = useState("TUTORIAL");
 
   const lastTimeRef = useRef(null);
   const spawnTimerRef = useRef(0);
@@ -244,6 +329,8 @@ function CleanupGameClassic({ onBack }) {
   };
 
   useEffect(() => {
+    if (phase === "TUTORIAL") return;
+    
     const loop = (timeNow) => {
       if (!lastTimeRef.current) lastTimeRef.current = timeNow;
       const dt = Math.min((timeNow - lastTimeRef.current) / 1000, 0.05);
@@ -259,7 +346,7 @@ function CleanupGameClassic({ onBack }) {
         spawnTimerRef.current -= dt;
         if (spawnTimerRef.current <= 0) {
           spawnItem();
-          spawnTimerRef.current = Math.max(0.6, 2 - (score * 0.01));
+          spawnTimerRef.current = 2;
         }
 
         setItems(prev => {
@@ -273,6 +360,7 @@ function CleanupGameClassic({ onBack }) {
             } else {
               // Can kaybı
               setLives(l => Math.max(0, l - 1));
+              soundManager.playDamage(); // Ses efekti
             }
           }
           return nextItems;
@@ -288,28 +376,60 @@ function CleanupGameClassic({ onBack }) {
 
   return (
     <View style={{ flex: 1 }}>
+      {phase === "TUTORIAL" && (
+        <TutorialModal 
+          title="Klasik Ayrıştırma"
+          instructions={[
+            "🎯 Atıkları sürükleyerek doğru kutuya bırakın",
+            "⏱️ 2 dakika içinde mümkün olduğunca çok puan kazanın",
+            "❤️ Yanlış kutuya atarsanız can kaybedersiniz",
+            "🚮 Atıklar yere düşerse de can gider",
+            "⭐ Her doğru atık +10 puan!"
+          ]}
+          onStart={() => setPhase("RUNNING")}
+        />
+      )}
       <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
       
       {/* Oyun Alanı */}
-      <View style={{ flex: 1 }}>
-        {items.map(item => (
+      <View style={{ flex: 1, position: 'relative' }} pointerEvents="box-none">
+        {items.map((item, index) => (
           <DraggableItem 
             key={item.id} 
-            item={item} 
-            onDrop={(x, y, type) => {
-              // Kutu kontrolü
+            item={item}
+            baseZIndex={index}
+            onDrop={(mouseX, mouseY, type, id) => {
+              // Kova kontrolü - 2 cm yakınlık (yaklaşık 75px)
               const binWidth = width / 5;
-              const binIndex = Math.floor(x / binWidth);
-              if (binIndex >= 0 && binIndex < 5) {
-                const targetType = TRASH_TYPES[binIndex];
-                if (targetType === type) {
-                  setScore(s => s + 10);
-                  setItems(prev => prev.filter(i => i.id !== item.id));
-                } else {
-                  setLives(l => l - 1);
-                  setItems(prev => prev.filter(i => i.id !== item.id));
+              const binStartY = height - 150;
+              const binEndY = height;
+              const proximityRange = 75; // 2 cm yaklaşık
+              
+              // Kova merkezlerini hesapla
+              for (let binIndex = 0; binIndex < 5; binIndex++) {
+                const binCenterX = (binIndex * binWidth) + (binWidth / 2);
+                const binCenterY = height - 100;
+                
+                // Mesafe kontrolü
+                const distance = Math.hypot(mouseX - binCenterX, mouseY - binCenterY);
+                
+                if (distance <= proximityRange) {
+                  const targetType = TRASH_TYPES[binIndex];
+                  if (targetType === type) {
+                    setScore(s => s + 10);
+                    soundManager.playScore(); // Ses efekti
+                    // Animasyon yok, direkt sil
+                    setItems(prev => prev.filter(i => i.id !== id));
+                    return 'success';
+                  } else {
+                    setLives(l => l - 1);
+                    soundManager.playDamage(); // Ses efekti
+                    setItems(prev => prev.filter(i => i.id !== id));
+                    return 'fail';
+                  }
                 }
               }
+              return 'miss';
             }}
           />
         ))}
@@ -323,99 +443,192 @@ function CleanupGameClassic({ onBack }) {
       </View>
 
       {phase === "ENDED" && <GameOverModal score={score} onRestart={() => {
-        setScore(0); setLives(3); setTime(60); setItems([]); setPhase("RUNNING");
+        setScore(0);
+        setLives(3);
+        setTime(120);
+        setItems([]);
+        setPhase("RUNNING");
       }} onMenu={onBack} />}
     </View>
   );
 }
 
 // Sürüklenebilir Öğe Bileşeni
-const DraggableItem = ({ item, onDrop }) => {
-  const pan = useRef(new Animated.ValueXY({ x: item.x, y: item.y })).current;
+const DraggableItem = ({ item, baseZIndex, onDrop }) => {
   const [dragging, setDragging] = useState(false);
-  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const [position, setPosition] = useState({ x: item.x, y: item.y });
+  const originalPos = useRef({ x: item.x, y: item.y });
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const ITEM_SIZE = 70; // wasteBubble boyutu
 
-  // item.y değiştiğinde animasyonu güncelle (sürüklenmiyorsa)
+  // item.y değiştiğinde pozisyonu güncelle (sürüklenmiyorsa)
   useEffect(() => {
     if (!dragging) {
-      pan.setValue({ x: item.x, y: item.y });
+      setPosition({ x: item.x, y: item.y });
+      originalPos.current = { x: item.x, y: item.y };
     }
   }, [item.x, item.y, dragging]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        setDragging(true);
-        pan.setOffset({
-          x: pan.x._value,
-          y: pan.y._value
-        });
-        pan.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderMove: Animated.event(
-        [null, { dx: pan.x, dy: pan.y }],
-        { useNativeDriver: false }
-      ),
-      onPanResponderRelease: (e, gesture) => {
-        setDragging(false);
-        pan.flattenOffset();
-        onDrop(gesture.moveX, gesture.moveY, item.type);
-      }
-    })
-  ).current;
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setDragging(true);
+    // Mouse'u itemin ortasına getir
+    setPosition({ 
+      x: e.nativeEvent.pageX - ITEM_SIZE / 2, 
+      y: e.nativeEvent.pageY - ITEM_SIZE / 2 
+    });
+    Animated.spring(scale, {
+      toValue: 1.2,
+      useNativeDriver: true,
+    }).start();
+  };
 
-  // Web uyumluluğu için mouse/touch event'leri
-  const handleStart = (e) => {
-    if (Platform.OS === 'web') {
-      setDragging(true);
-      const touch = e.nativeEvent.touches ? e.nativeEvent.touches[0] : e.nativeEvent;
-      dragOffsetRef.current = { 
-        x: touch.pageX - pan.x._value, 
-        y: touch.pageY - pan.y._value 
+  const handleMouseMove = (e) => {
+    if (!dragging) return;
+    // Item mouse'un tam altında olsun
+    setPosition({ 
+      x: e.nativeEvent.pageX - ITEM_SIZE / 2, 
+      y: e.nativeEvent.pageY - ITEM_SIZE / 2 
+    });
+  };
+
+  const handleMouseUp = (e) => {
+    if (!dragging) return;
+    
+    // Item'in merkez noktası
+    const dropX = e.nativeEvent.pageX;
+    const dropY = e.nativeEvent.pageY;
+    
+    setDragging(false);
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+
+    // Kova kontrolü
+    const result = onDrop(dropX, dropY, item.type, item.id);
+    
+    if (result === 'success') {
+      // Başarılı - Kovaya girme animasyonu
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else if (result === 'fail') {
+      // Yanlış kova - Geri dön
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.3,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        })
+      ]).start();
+      setPosition(originalPos.current);
+    } else {
+      // Kovaya atılmadı - Geri dön
+      setPosition(originalPos.current);
+    }
+  };
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && dragging) {
+      const handleGlobalMouseMove = (e) => {
+        // Item mouse'un tam altında olsun
+        setPosition({ 
+          x: e.pageX - ITEM_SIZE / 2, 
+          y: e.pageY - ITEM_SIZE / 2 
+        });
+      };
+      const handleGlobalMouseUp = (e) => {
+        // Item'in merkez noktası
+        const dropX = e.pageX;
+        const dropY = e.pageY;
+        
+        setDragging(false);
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+        }).start();
+
+        const result = onDrop(dropX, dropY, item.type, item.id);
+        
+        if (result === 'success') {
+          Animated.parallel([
+            Animated.timing(scale, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            })
+          ]).start();
+        } else if (result === 'fail') {
+          Animated.sequence([
+            Animated.timing(opacity, {
+              toValue: 0.3,
+              duration: 100,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 100,
+              useNativeDriver: true,
+            })
+          ]).start();
+          setPosition(originalPos.current);
+        } else {
+          setPosition(originalPos.current);
+        }
+      };
+
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleGlobalMouseMove);
+        document.removeEventListener('mouseup', handleGlobalMouseUp);
       };
     }
-  };
+  }, [dragging]);
 
-  const handleMove = (e) => {
-    if (Platform.OS === 'web' && dragging) {
-      const touch = e.nativeEvent.touches ? e.nativeEvent.touches[0] : e.nativeEvent;
-      pan.setValue({ 
-        x: touch.pageX - dragOffsetRef.current.x, 
-        y: touch.pageY - dragOffsetRef.current.y 
-      });
-    }
-  };
-
-  const handleEnd = (e) => {
-    if (Platform.OS === 'web' && dragging) {
-      setDragging(false);
-      const touch = e.nativeEvent.changedTouches ? e.nativeEvent.changedTouches[0] : e.nativeEvent;
-      onDrop(touch.pageX, touch.pageY, item.type);
-    }
-  };
-
-  const handlers = Platform.OS === 'web' ? {
-    onTouchStart: handleStart,
-    onTouchMove: handleMove,
-    onTouchEnd: handleEnd,
-    onMouseDown: handleStart,
-    onMouseMove: handleMove,
-    onMouseUp: handleEnd
-  } : panResponder.panHandlers;
+  const cfg = TRASH_CONFIG[item.type];
 
   return (
     <Animated.View
-      {...handlers}
+      onMouseDown={handleMouseDown}
       style={{
         position: 'absolute',
-        transform: pan.getTranslateTransform(),
-        zIndex: dragging ? 100 : 1,
-        cursor: Platform.OS === 'web' ? (dragging ? 'grabbing' : 'grab') : 'auto'
+        left: position.x,
+        top: position.y,
+        zIndex: dragging ? 1000 : baseZIndex,
+        cursor: Platform.OS === 'web' ? (dragging ? 'grabbing' : 'grab') : 'auto',
+        transform: [{ scale }],
+        opacity,
       }}
     >
-      <View style={styles.wasteBubble}>
-        <Text style={{ fontSize: 30 }}>{TRASH_CONFIG[item.type].icon}</Text>
+      <View style={{ 
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 70,
+        height: 70,
+      }}>
+        <Text style={{ fontSize: 50, filter: dragging ? 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' : 'none' }}>{cfg.icon}</Text>
       </View>
     </Animated.View>
   );
@@ -442,8 +655,8 @@ function CleanupGameSlingshot({ onBack }) {
 
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
-  const [time, setTime] = useState(60);
-  const [phase, setPhase] = useState("RUNNING");
+  const [time, setTime] = useState(120);
+  const [phase, setPhase] = useState("TUTORIAL");
   
   const [projectile, setProjectile] = useState(null);
   const [currentType, setCurrentType] = useState(TRASH_TYPES[0]);
@@ -451,19 +664,22 @@ function CleanupGameSlingshot({ onBack }) {
   const [dragCurrent, setDragCurrent] = useState(null);
 
   // State Ref
-  const stateRef = useRef({ phase, projectile, currentType, isPortrait });
+  const lastTimeRef = useRef(null);
+  const stateRef = useRef({ phase, projectile, currentType, isPortrait, lives });
   useEffect(() => {
-    stateRef.current = { phase, projectile, currentType, isPortrait };
-  }, [phase, projectile, currentType, isPortrait]);
+    stateRef.current = { phase, projectile, currentType, isPortrait, lives };
+  }, [phase, projectile, currentType, isPortrait, lives]);
 
-  // Kovalar (Sağ tarafta, piramit/sıralı düzen)
-  const startBinX = gameW * 0.65;
+  // Kovalar (Sağ tarafta, yan yana tek sıra)
+  const startBinX = gameW * 0.45;
+  const binSpacing = 75;
+  const binY = gameH * 0.75; // Daha aşağıda ve tek sıra
   const BINS = [
-    { type: "plastic", x: startBinX, y: gameH * 0.65 },
-    { type: "paper", x: startBinX + 90, y: gameH * 0.65 },
-    { type: "glass", x: startBinX + 180, y: gameH * 0.65 },
-    { type: "metal", x: startBinX + 45, y: gameH * 0.45 },
-    { type: "organic", x: startBinX + 135, y: gameH * 0.45 },
+    { type: "plastic", x: startBinX, y: binY },
+    { type: "paper", x: startBinX + binSpacing, y: binY },
+    { type: "glass", x: startBinX + binSpacing * 2, y: binY },
+    { type: "metal", x: startBinX + binSpacing * 3, y: binY },
+    { type: "organic", x: startBinX + binSpacing * 4, y: binY },
   ];
 
   const panResponder = useRef(
@@ -523,20 +739,24 @@ function CleanupGameSlingshot({ onBack }) {
 
   // Fizik Döngüsü
   useEffect(() => {
+    if (phase === "TUTORIAL") return;
     if (phase !== "RUNNING") return;
 
     let raf;
     let lastT = 0;
     
     const loop = (t) => {
-      raf = requestAnimationFrame(loop);
-      
-      if (!lastT) { lastT = t; return; }
+      if (!lastT) { lastT = t; }
       const dt = Math.min((t - lastT)/1000, 0.05);
       lastT = t;
 
       // StateRef'ten güncel veriyi al (Closure sorununu çözer)
-      const { projectile: p, lives: l } = stateRef.current;
+      const { projectile: p, lives: l, phase: currentPhase } = stateRef.current;
+
+      if (currentPhase !== "RUNNING") {
+        cancelAnimationFrame(raf);
+        return;
+      }
 
       if (p && p.active) {
         let { x, y, vx, vy } = p;
@@ -563,8 +783,20 @@ function CleanupGameSlingshot({ onBack }) {
         }
 
         if (hit) {
-          if (newScore > 0) setScore(s => s + newScore);
-          if (lifeLost) setLives(prev => prev - 1);
+          if (newScore > 0) {
+            setScore(s => s + newScore);
+            soundManager.playScore(); // Ses efekti
+          }
+          if (lifeLost) {
+            setLives(prev => {
+              const newLives = prev - 1;
+              if (newLives <= 0) {
+                setPhase("ENDED");
+              }
+              return newLives;
+            });
+            soundManager.playDamage(); // Ses efekti
+          }
           setProjectile(null); // Yok et
         } else if (x > gameW + 50 || y > gameH + 50 || x < -50) {
            setProjectile(null); // Ekran dışı
@@ -584,7 +816,7 @@ function CleanupGameSlingshot({ onBack }) {
         return n;
       });
       
-      if (l <= 0) setPhase("ENDED");
+      raf = requestAnimationFrame(loop);
     };
 
     raf = requestAnimationFrame(loop);
@@ -672,7 +904,21 @@ function CleanupGameSlingshot({ onBack }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <View style={containerStyle}>
-        <OceanBackground />
+        {phase === "TUTORIAL" && (
+          <TutorialModal 
+            title="Sapan Basketi"
+            instructions={[
+              "🏀 Atıkları sürükle, geri çek ve bırak!",
+              "🎯 Doğru renkli kutuya at",
+              "⏱️ 2 dakika içinde maksimum puan topla",
+              "❤️ 3 hakkın var - dikkatli nişan al",
+              "🔥 Fizik tabanlı atış mekaniği",
+              "📱 Telefonu yatay tut!"
+            ]}
+            onStart={() => setPhase("RUNNING")}
+          />
+        )}
+        <NatureBackground />
         <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
         
         <View style={{ flex: 1 }} {...panResponder.panHandlers}>
@@ -706,29 +952,37 @@ function CleanupGameSlingshot({ onBack }) {
 
           {/* Top (Sapanın ucunda veya havada) */}
           {dragCurrent ? (
-            <View style={{ position: 'absolute', left: dragCurrent.x - 20, top: dragCurrent.y - 20 }}>
-              <View style={styles.wasteBubble}><Text style={{fontSize:24}}>{TRASH_CONFIG[currentType].icon}</Text></View>
+            <View style={{ position: 'absolute', left: dragCurrent.x - 25, top: dragCurrent.y - 25, zIndex: 10 }}>
+              <Text style={{fontSize:50}}>{TRASH_CONFIG[currentType].icon}</Text>
             </View>
           ) : (
             !projectile && (
-              <View style={{ position: 'absolute', left: SLING_CONFIG.anchorX - 20, top: SLING_CONFIG.anchorY - 20 }}>
-                <View style={styles.wasteBubble}><Text style={{fontSize:24}}>{TRASH_CONFIG[currentType].icon}</Text></View>
+              <View style={{ position: 'absolute', left: SLING_CONFIG.anchorX - 25, top: SLING_CONFIG.anchorY - 25, zIndex: 10 }}>
+                <Text style={{fontSize:50}}>{TRASH_CONFIG[currentType].icon}</Text>
               </View>
             )
           )}
 
           {/* Uçan Mermi */}
           {projectile && (
-            <View style={{ position: 'absolute', left: projectile.x - 20, top: projectile.y - 20 }}>
-              <View style={styles.wasteBubble}><Text style={{fontSize:24}}>{TRASH_CONFIG[projectile.type].icon}</Text></View>
+            <View style={{ position: 'absolute', left: projectile.x - 25, top: projectile.y - 25, zIndex: 10 }}>
+              <Text style={{fontSize:50}}>{TRASH_CONFIG[projectile.type].icon}</Text>
             </View>
           )}
         </View>
 
         {phase === "ENDED" && (
-          <View style={[styles.overlay, { transform: [{ rotate: '-90deg' }] }]}>
+          <View style={styles.overlay}>
              <GameOverModal score={score} onRestart={() => {
-               setScore(0); setLives(3); setTime(60); setPhase("RUNNING");
+               lastTimeRef.current = null;
+               setScore(0);
+               setLives(3);
+               setTime(120);
+               setProjectile(null);
+               setCurrentType(TRASH_TYPES[0]);
+               setDragStart(null);
+               setDragCurrent(null);
+               setPhase("RUNNING");
              }} onMenu={onBack} />
           </View>
         )}
@@ -742,31 +996,76 @@ function CleanupGameLaneSwap({ onBack }) {
   const { width, height } = useWindowDimensions();
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
-  const [time, setTime] = useState(60);
-  const [phase, setPhase] = useState("RUNNING");
+  const [time, setTime] = useState(100);
+  const [phase, setPhase] = useState("TUTORIAL"); // TUTORIAL, RUNNING, ENDED
   
-  const [binOrder, setBinOrder] = useState([...TRASH_TYPES]);
-  const [selectedLane, setSelectedLane] = useState(null);
+  // Sabit kova sırası (değişmez)
+  const binOrder = [...TRASH_TYPES]; // [plastic, paper, glass, metal, organic]
+  
   const [items, setItems] = useState([]);
+  const [activeItemIndex, setActiveItemIndex] = useState(0); // Kontrol edilen item
   
   const spawnTimerRef = useRef(0);
   const lastTimeRef = useRef(null);
 
-  const handleLanePress = (index) => {
-    if (selectedLane === null) setSelectedLane(index);
-    else {
-      if (selectedLane !== index) {
-        const newOrder = [...binOrder];
-        const temp = newOrder[selectedLane];
-        newOrder[selectedLane] = newOrder[index];
-        newOrder[index] = temp;
-        setBinOrder(newOrder);
-      }
-      setSelectedLane(null);
-    }
+  // Her seferinde sadece 1 item spawn et (rastgele tip, rastgele şerit)
+  const spawnItem = () => {
+    const type = TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)];
+    
+    // Rastgele şerit seç (doğru kovada olmasın)
+    let randomLane;
+    do {
+      randomLane = Math.floor(Math.random() * 5);
+    } while (binOrder[randomLane] === type);
+    
+    const newItem = {
+      id: `${Date.now()}`,
+      type,
+      lane: randomLane,
+      y: -60,
+      speed: (height + 60) / 2.5 // 2.5 saniyede kovalara ulaşsın
+    };
+    
+    setItems(prev => [...prev, newItem]);
   };
 
+  // Klavye kontrolü
   useEffect(() => {
+    if (phase !== "RUNNING") return;
+    
+    const handleKeyPress = (e) => {
+      if (items.length === 0) return;
+      
+      const currentItem = items[activeItemIndex];
+      if (!currentItem) return;
+      
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setItems(prev => prev.map((item, idx) => 
+          idx === activeItemIndex 
+            ? { ...item, lane: Math.max(0, item.lane - 1) }
+            : item
+        ));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setItems(prev => prev.map((item, idx) => 
+          idx === activeItemIndex 
+            ? { ...item, lane: Math.min(4, item.lane + 1) }
+            : item
+        ));
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      document.addEventListener('keydown', handleKeyPress);
+      return () => document.removeEventListener('keydown', handleKeyPress);
+    }
+  }, [phase, items, activeItemIndex]);
+
+  useEffect(() => {
+    // Tutorial fazında animasyon döngüsünü başlatma
+    if (phase === "TUTORIAL") return;
+    
     const loop = (t) => {
       if (!lastTimeRef.current) lastTimeRef.current = t;
       const dt = Math.min((t - lastTimeRef.current)/1000, 0.05);
@@ -781,25 +1080,47 @@ function CleanupGameLaneSwap({ onBack }) {
 
         spawnTimerRef.current -= dt;
         if (spawnTimerRef.current <= 0) {
-          const lane = Math.floor(Math.random() * 5);
-          const type = TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)];
-          setItems(p => [...p, { id: Math.random().toString(), type, lane, y: -60, speed: 150 + score }]);
-          spawnTimerRef.current = Math.max(0.5, 1.5 - score * 0.01);
+          spawnItem();
+          spawnTimerRef.current = 2.5; // 2.5 saniyede bir spawn
         }
 
         setItems(prev => {
           const next = [];
-          for (let item of prev) {
+          let itemRemoved = false;
+          
+          for (let i = 0; i < prev.length; i++) {
+            const item = { ...prev[i] };
             item.y += item.speed * dt;
+            
             if (item.y > height - 150) {
-              if (binOrder[item.lane] === item.type) setScore(s => s + 10);
-              else setLives(l => l - 1);
+              // Kovaya ulaştı
+              if (binOrder[item.lane] === item.type) {
+                // Doğru kova - puan
+                setScore(s => s + 10);
+                soundManager.playScore(); // Ses efekti
+              } else {
+                // Yanlış kova - can kaybı
+                setLives(l => l - 1);
+                soundManager.playDamage(); // Ses efekti
+              }
+              
+              // İlk item silindi, aktif index'i güncelle
+              if (i === 0) {
+                itemRemoved = true;
+              }
             } else {
               next.push(item);
             }
           }
+          
+          // Eğer ilk item silindiyse, activeItemIndex'i 0'da tut (yeni ilk item)
+          if (itemRemoved) {
+            setActiveItemIndex(0);
+          }
+          
           return next;
         });
+        
         if (lives <= 0) setPhase("ENDED");
       }
       requestAnimationFrame(loop);
@@ -810,8 +1131,23 @@ function CleanupGameLaneSwap({ onBack }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <OceanBackground />
+      <NatureBackground />
       <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
+      
+      {/* Tutorial Ekranı */}
+      {phase === "TUTORIAL" && (
+        <TutorialModal 
+          title="Şerit Değiştir"
+          instructions={[
+            "←️ ➡️ Yön Tuşları ile itemi hareket ettir",
+            "✅ Doğru kova → +10 Puan",
+            "❌ Yanlış kova → -1 Can",
+            "⏱️ 100 saniye içinde maksimum puan!",
+            "💡 Parlak item aktiftir - sadece onu kontrol edersin"
+          ]}
+          onStart={() => setPhase("RUNNING")}
+        />
+      )}
       
       {/* Şeritler */}
       <View style={{ flexDirection: 'row', flex: 1 }}>
@@ -820,25 +1156,35 @@ function CleanupGameLaneSwap({ onBack }) {
         ))}
       </View>
 
-      {/* Düşenler */}
-      {items.map(item => (
-        <View key={item.id} style={{
-          position: 'absolute',
-          left: (item.lane * (width/5)) + (width/10) - 25,
-          top: item.y,
-        }}>
-          <View style={styles.wasteBubble}><Text style={{fontSize:24}}>{TRASH_CONFIG[item.type].icon}</Text></View>
+      {/* Düşen itemler */}
+      {items.map((item, index) => (
+        <View
+          key={item.id}
+          style={{
+            position: 'absolute',
+            left: (item.lane * (width/5)) + (width/10) - 35,
+            top: item.y,
+          }}
+        >
+          <View style={{
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 70,
+            height: 70,
+            opacity: index === activeItemIndex ? 1 : 0.5,
+            transform: [{ scale: index === activeItemIndex ? 1.2 : 1 }],
+          }}>
+            <Text style={{ fontSize: 50 }}>{TRASH_CONFIG[item.type].icon}</Text>
+          </View>
         </View>
       ))}
 
-      {/* Kovalar */}
+      {/* Kovalar (Sabit) */}
       <View style={{ position: 'absolute', bottom: 20, left: 0, right: 0, flexDirection: 'row', height: 100, alignItems: 'flex-end' }}>
         {binOrder.map((type, i) => (
           <View key={i} style={{ flex: 1, padding: 2 }}>
             <Bin3D 
-              type={type} 
-              isSelected={selectedLane === i} 
-              onClick={() => handleLanePress(i)}
+              type={type}
               style={{ width: '100%' }}
             />
           </View>
@@ -846,28 +1192,60 @@ function CleanupGameLaneSwap({ onBack }) {
       </View>
 
       {phase === "ENDED" && <GameOverModal score={score} onRestart={() => {
-        setScore(0); setLives(3); setTime(60); setItems([]); setPhase("RUNNING");
+        setScore(0);
+        setLives(3);
+        setTime(100);
+        setItems([]);
+        setActiveItemIndex(0);
+        spawnTimerRef.current = 0;
+        lastTimeRef.current = null;
+        setPhase("TUTORIAL");
       }} onMenu={onBack} />}
     </View>
   );
 }
 
 // --- ORTAK MODAL ---
-const GameOverModal = ({ score, onRestart, onMenu }) => (
-  <View style={styles.overlay}>
-    <View style={styles.modalCard}>
-      <Text style={{ color: 'white', fontSize: 24, marginBottom: 10 }}>Oyun Bitti</Text>
-      <Text style={{ color: '#ccc', fontSize: 16 }}>Toplam Skor</Text>
-      <Text style={{ color: COLORS.accent, fontSize: 48, fontWeight: '900', marginVertical: 20 }}>{score}</Text>
-      <TouchableOpacity style={styles.btnAction} onPress={onRestart}>
-        <Text style={styles.btnText}>Tekrar Oyna</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.btnAction, styles.btnSecondary]} onPress={onMenu}>
-        <Text style={styles.btnText}>Ana Menü</Text>
-      </TouchableOpacity>
+const GameOverModal = ({ score, onRestart, onMenu }) => {
+  const [saved, setSaved] = useState(false);
+
+  // Oyun bitince puanı kaydet
+  useEffect(() => {
+    if (!saved) {
+      saveScore();
+      soundManager.playGameOver(); // Oyun bitti sesi
+      setSaved(true);
+    }
+  }, []);
+
+  const saveScore = async () => {
+    try {
+      const currentTotal = await AsyncStorage.getItem('totalScore');
+      const newTotal = (parseInt(currentTotal, 10) || 0) + score;
+      await AsyncStorage.setItem('totalScore', newTotal.toString());
+      console.log('Score saved:', score, 'Total:', newTotal);
+    } catch (error) {
+      console.log('Error saving score:', error);
+    }
+  };
+
+  return (
+    <View style={styles.overlay}>
+      <View style={styles.modalCard}>
+        <Text style={{ color: 'white', fontSize: 24, marginBottom: 10 }}>Oyun Bitti</Text>
+        <Text style={{ color: '#ccc', fontSize: 16 }}>Bu Oyun Skoru</Text>
+        <Text style={{ color: COLORS.accent, fontSize: 48, fontWeight: '900', marginVertical: 20 }}>{score}</Text>
+        <Text style={{ color: '#4ade80', fontSize: 14, marginBottom: 10 }}>✓ Toplam puanınıza eklendi!</Text>
+        <TouchableOpacity style={styles.btnAction} onPress={onRestart}>
+          <Text style={styles.btnText}>Tekrar Oyna</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.btnAction, styles.btnSecondary]} onPress={onMenu}>
+          <Text style={styles.btnText}>Ana Menü</Text>
+        </TouchableOpacity>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   // --- UI STYLES ---
@@ -891,6 +1269,20 @@ const styles = StyleSheet.create({
   },
   hudIcon: { fontSize: 20, color: '#fff' },
   hudText: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
+  backButton: {
+    backgroundColor: 'rgba(255, 100, 100, 0.3)',
+    borderColor: 'rgba(255, 100, 100, 0.5)',
+  },
+  backIcon: { 
+    fontSize: 24, 
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  backText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#fff',
+  },
 
   // --- MENU STYLES ---
   menuContainer: {
@@ -899,6 +1291,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 20,
     padding: 20,
+  },
+  menuHeader: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    zIndex: 100,
   },
   menuTitle: {
     fontSize: 48,
@@ -978,17 +1376,18 @@ const styles = StyleSheet.create({
   binLabelText: { fontSize: 10, fontWeight: 'bold', color: '#333' },
 
   wasteBubble: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 70,
+    height: 70,
+    borderRadius: 12,
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 3,
+    borderColor: '#333',
     shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
 
   // --- MODAL ---
@@ -1036,8 +1435,8 @@ function SnakeGame({ onBack }) {
 
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
-  const [time, setTime] = useState(60);
-  const [phase, setPhase] = useState("RUNNING");
+  const [time, setTime] = useState(120);
+  const [phase, setPhase] = useState("TUTORIAL");
   const [snake, setSnake] = useState([{ x: 4, y: 8 }, { x: 3, y: 8 }, { x: 2, y: 8 }]);
   const [direction, setDirection] = useState({ dx: 1, dy: 0 });
   const [nextDirection, setNextDirection] = useState({ dx: 1, dy: 0 });
@@ -1086,6 +1485,7 @@ function SnakeGame({ onBack }) {
 
   // Interval tabanlı hareket sistemi
   useEffect(() => {
+    if (phase === "TUTORIAL") return;
     if (phase !== "RUNNING") return;
 
     const moveSnake = () => {
@@ -1108,6 +1508,7 @@ function SnakeGame({ onBack }) {
 
       if (gw && head.x === gw.x && head.y === gw.y) {
         setScore(sc + 1);
+        soundManager.playScore(); // Ses efekti
         spawnGoodWaste();
       } else {
         newSnake.pop();
@@ -1118,6 +1519,7 @@ function SnakeGame({ onBack }) {
         if (h.x === head.x && h.y === head.y) {
           hitHazard = true;
           setLives(prev => prev - 1);
+          soundManager.playDamage(); // Ses efekti
           setIsDamaged(true);
           setTimeout(() => setIsDamaged(false), 1000);
           return false;
@@ -1203,6 +1605,20 @@ function SnakeGame({ onBack }) {
 
   return (
     <View style={{ flex: 1 }}>
+      {phase === "TUTORIAL" && (
+        <TutorialModal 
+          title="Yılan Oyunu"
+          instructions={[
+            "🐍 Ok tuşları ile yönü kontrol et",
+            "🍎 İyi atıkları topla (+1 puan)",
+            "☠️ Zehirli atıklardan kaç (-1 can)",
+            "⏱️ 2 dakika içinde maksimum puan topla",
+            "❤️ 3 canın var - dikkatli ol",
+            "⌨️ ← → ↑ ↓ tuşlarını kullan"
+          ]}
+          onStart={() => setPhase("RUNNING")}
+        />
+      )}
       <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
       
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bgDeep }}>
@@ -1311,10 +1727,15 @@ function SnakeGame({ onBack }) {
         <GameOverModal
           score={score}
           onRestart={() => {
-            setScore(0); setLives(3); setTime(60); setPhase("RUNNING");
+            setScore(0);
+            setLives(3);
+            setTime(120);
+            setPhase("RUNNING");
             setSnake([{ x: 4, y: 8 }, { x: 3, y: 8 }, { x: 2, y: 8 }]);
-            setDirection({ dx: 1, dy: 0 }); setNextDirection({ dx: 1, dy: 0 });
-            setGoodWaste({ x: 10, y: 8, icon: '🍎' }); setHazards([]);
+            setDirection({ dx: 1, dy: 0 });
+            setNextDirection({ dx: 1, dy: 0 });
+            setGoodWaste({ x: 10, y: 8, icon: '🍎' });
+            setHazards([]);
           }}
           onMenu={onBack}
         />

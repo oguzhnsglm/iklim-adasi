@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Konusma Terapisi",
-    "slug": "konusma-terapisi",
+    "name": "Atık Oyunu",
+    "slug": "atik-oyunu",
     "version": "1.0.0",
     "orientation": "portrait",
     "jsEngine": "hermes",

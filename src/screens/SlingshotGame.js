@@ -13,10 +13,10 @@ import {
 export default function SlingshotGame({ onBack }) {
   const { width, height } = useWindowDimensions();
   
-  // Oyunun yatay oynanacağını varsayıyoruz
+  // Dinamik boyutlandırma - her zaman mevcut ekran boyutunu kullan
+  const gameW = width;
+  const gameH = height;
   const isPortrait = height > width;
-  const gameW = isPortrait ? height : width;
-  const gameH = isPortrait ? width : height;
 
   // --- FÜTÜRİSTİK ÇÖL ARKA PLANI ---
   const FuturisticDesertBackground = () => {
@@ -333,7 +333,8 @@ export default function SlingshotGame({ onBack }) {
     return () => cancelAnimationFrame(raf);
   }, [phase, gameW, gameH]);
 
-  const containerStyle = isPortrait ? {
+  const isPortraitMode = height > width;
+  const containerStyle = isPortraitMode ? {
     width: gameW, height: gameH,
     position: 'absolute',
     top: (height - gameH) / 2, left: (width - gameW) / 2,

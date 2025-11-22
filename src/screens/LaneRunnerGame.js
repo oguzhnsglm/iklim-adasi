@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Platform, PanResponder } from "react-native";
 import soundManager from '../utils/sounds';
 
 const { width, height } = Dimensions.get('window');
@@ -15,6 +15,31 @@ export default function LaneRunnerGame({ onBack }) {
   const stateRef = useRef({ phase, playerLane, items, lives, score });
   const gameLoop = useRef(null);
   const itemSpawnTimer = useRef(null);
+
+  // Swipe gesture için PanResponder
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => Platform.OS !== 'web' && phase === "RUNNING",
+      onMoveShouldSetPanResponder: () => Platform.OS !== 'web' && phase === "RUNNING",
+      onPanResponderRelease: (evt, gestureState) => {
+        if (Platform.OS === 'web' || phase !== "RUNNING") return;
+        
+        const { dx } = gestureState;
+        const minSwipeDistance = 30;
+        
+        // Sadece yatay kaydırma (sağ/sol)
+        if (Math.abs(dx) > minSwipeDistance) {
+          if (dx > 0) {
+            // Sağa kaydırma
+            setPlayerLane(1);
+          } else {
+            // Sola kaydırma
+            setPlayerLane(0);
+          }
+        }
+      }
+    })
+  ).current;
 
   useEffect(() => {
     stateRef.current = { phase, playerLane, items, lives, score };
@@ -182,7 +207,7 @@ export default function LaneRunnerGame({ onBack }) {
 
       {/* Oyun ekranı */}
       {phase === "RUNNING" && (
-        <>
+        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
           {/* HUD */}
           <View style={styles.hud}>
             <Text style={styles.hudText}>❤️ {lives}</Text>
@@ -228,7 +253,7 @@ export default function LaneRunnerGame({ onBack }) {
           <View style={styles.backButton} onStartShouldSetResponder={() => true} onResponderRelease={onBack}>
             <Text style={styles.backButtonText}>← Geri</Text>
           </View>
-        </>
+        </View>
       )}
 
       {/* Game Over */}

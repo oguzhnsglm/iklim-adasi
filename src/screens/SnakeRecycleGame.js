@@ -35,7 +35,7 @@ export default function SnakeRecycleGame({ onBack }) {
   }, [phase, snake, nextDirection, goodWaste, hazards, lives, score]);
 
   const GOOD_ICONS = ['🍎', '🍌', '🍉', '🍇', '🥕'];
-  const BAD_ICONS = ['🔋', '🥤', '💊', '🧴', '🛢️'];
+  const BAD_ICONS = ['🔋', '🥤', '💊', '🧴', '🛢️', '🧪', '⚡', '☢️', '🔥', '💀', '🚬', '🧨'];
 
   const getRandomPos = () => ({
     x: Math.floor(Math.random() * TILE_COUNT),
@@ -61,7 +61,7 @@ export default function SnakeRecycleGame({ onBack }) {
     setHazards(prev => [...prev, hazard]);
     setTimeout(() => {
       setHazards(prev => prev.filter(h => h.id !== hazard.id));
-    }, 15000);
+    }, 12000); // 15 saniyeden 12 saniyeye düşürüldü
   };
 
   useEffect(() => {
@@ -124,6 +124,9 @@ export default function SnakeRecycleGame({ onBack }) {
 
     moveIntervalRef.current = setInterval(moveSnake, GAME_SPEED);
 
+    // Oyun başında bir zehirli ürün spawn et
+    setTimeout(() => spawnHazard(), 3000);
+
     const timeInterval = setInterval(() => {
       setTime(prev => {
         const next = prev - 1;
@@ -137,7 +140,7 @@ export default function SnakeRecycleGame({ onBack }) {
 
     const hazardInterval = setInterval(() => {
       spawnHazard();
-    }, 15000);
+    }, 12000); // Zehirli spawn aralığı
 
     return () => {
       clearInterval(moveIntervalRef.current);

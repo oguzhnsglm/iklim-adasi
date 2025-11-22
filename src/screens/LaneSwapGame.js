@@ -235,8 +235,7 @@ export default function LaneSwapGame({ onBack }) {
   const [time, setTime] = useState(100);
   const [phase, setPhase] = useState("TUTORIAL");
   
-  const [binOrder, setBinOrder] = useState([...TRASH_TYPES]);
-  const [selectedBin, setSelectedBin] = useState(null);
+  const binOrder = TRASH_TYPES; // Kovalar artık sabit
   
   const [items, setItems] = useState([]);
   const [activeItemIndex, setActiveItemIndex] = useState(0);
@@ -263,20 +262,41 @@ export default function LaneSwapGame({ onBack }) {
     setItems(prev => [...prev, newItem]);
   };
 
-  const handleBinClick = (index) => {
-    if (selectedBin === null) {
-      setSelectedBin(index);
-      soundManager.playScore();
-    } else if (selectedBin === index) {
-      setSelectedBin(null);
-    } else {
-      const newOrder = [...binOrder];
-      [newOrder[selectedBin], newOrder[index]] = [newOrder[index], newOrder[selectedBin]];
-      setBinOrder(newOrder);
-      setSelectedBin(null);
-      soundManager.playScore();
+  // Klavye ile item hareket ettirme
+  useEffect(() => {
+    if (Platform.OS !== 'web' || phase !== "RUNNING") return;
+    
+    const handleKeyPress = (e) => {
+      if (items.length === 0) return;
+      
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setItems(prev => {
+          const updated = [...prev];
+          if (updated[0] && updated[0].lane > 0) {
+            updated[0] = { ...updated[0], lane: updated[0].lane - 1 };
+          }
+          return updated;
+        });
+        soundManager.playScore();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setItems(prev => {
+          const updated = [...prev];
+          if (updated[0] && updated[0].lane < 4) {
+            updated[0] = { ...updated[0], lane: updated[0].lane + 1 };
+          }
+          return updated;
+        });
+        soundManager.playScore();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', handleKeyPress);
+      return () => document.removeEventListener('keydown', handleKeyPress);
     }
-  };
+  }, [phase, items]);
 
   useEffect(() => {
     if (phase === "TUTORIAL") return;
@@ -349,8 +369,8 @@ export default function LaneSwapGame({ onBack }) {
         <TutorialModal 
           title="Şerit Değiştir"
           instructions={[
-            "🗑️ Kovaları tıklayarak yerlerini değiştir",
-            "📦 Düşen atığı doğru kovaya yönlendir",
+            "⬅️➡️ Ok tuşları ile item'i yönlendir",
+            "🎯 Düşen atığı doğru kovaya yönlendir",
             "✅ Doğru kova → +10 Puan",
             "❌ Yanlış kova → -1 Can",
             "⏱️ 100 saniye içinde maksimum puan!"
@@ -394,8 +414,6 @@ export default function LaneSwapGame({ onBack }) {
             <Bin3D 
               type={type}
               style={{ width: '100%' }}
-              onClick={() => handleBinClick(i)}
-              isSelected={selectedBin === i}
             />
           </View>
         ))}
@@ -407,8 +425,6 @@ export default function LaneSwapGame({ onBack }) {
         setTime(100);
         setItems([]);
         setActiveItemIndex(0);
-        setBinOrder([...TRASH_TYPES]);
-        setSelectedBin(null);
         spawnTimerRef.current = 0;
         lastTimeRef.current = null;
         setPhase("TUTORIAL");

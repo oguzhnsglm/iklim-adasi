@@ -9,6 +9,8 @@ import ClassicRecycleGame from './ClassicRecycleGame';
 import SlingshotGame from './SlingshotGame';
 import LaneSwapGame from './LaneSwapGame';
 import SnakeRecycleGame from './SnakeRecycleGame';
+import FlyBirdGame from './FlyBirdGame';
+import LaneRunnerGame from './LaneRunnerGame';
 
 const COLORS = {
   bgDeep: "#1a4d2e",
@@ -32,6 +34,8 @@ export default function CleanupGame({ onExit }) {
       {gameMode === "MEMORY" && <MemoryGame onBack={() => setGameMode("SELECTION")} />}
       {gameMode === "MATH" && <MathGame onBack={() => setGameMode("SELECTION")} />}
       {gameMode === "ENGLISH" && <EnglishRecycleGame onBack={() => setGameMode("SELECTION")} />}
+      {gameMode === "FLYBIRD" && <FlyBirdGame onBack={() => setGameMode("SELECTION")} />}
+      {gameMode === "LANERUNNER" && <LaneRunnerGame onBack={() => setGameMode("SELECTION")} />}
     </View>
   );
 }
@@ -48,66 +52,66 @@ function ModeSelectionScreen({ onSelectMode, onExit }) {
       
       <KeyboardScrollView 
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 15, gap: 12 }}
+        contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 15 }}
         showsVerticalScrollIndicator={true}
       >
         <Text style={styles.menuTitle}>DOĞAYI{"\n"}<Text style={{ fontSize: 24, opacity: 0.8 }}>KORU</Text></Text>
         
-        <TouchableOpacity style={[styles.modeCard, { backgroundColor: 'rgba(76, 175, 80, 0.25)', borderColor: 'rgba(76, 175, 80, 0.5)' }]} onPress={() => onSelectMode("CLASSIC")}>
-          <View style={[styles.cardIconBg, { backgroundColor: 'rgba(76, 175, 80, 0.3)' }]}><Text style={{ fontSize: 30 }}>🚮</Text></View>
-          <View>
+        <View style={styles.gridContainer}>
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(76, 175, 80, 0.25)', borderColor: 'rgba(76, 175, 80, 0.5)' }]} onPress={() => onSelectMode("CLASSIC")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(76, 175, 80, 0.3)' }]}><Text style={{ fontSize: 30 }}>🚮</Text></View>
             <Text style={styles.cardTitle}>Klasik Ayrıştırma</Text>
             <Text style={styles.cardDesc}>Atıkları sürükle ve kutulara bırak.</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.modeCard, { backgroundColor: 'rgba(255, 152, 0, 0.25)', borderColor: 'rgba(255, 152, 0, 0.5)' }]} onPress={() => onSelectMode("SLINGSHOT")}>
-          <View style={[styles.cardIconBg, { backgroundColor: 'rgba(255, 152, 0, 0.3)' }]}><Text style={{ fontSize: 30 }}>🏀</Text></View>
-          <View>
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(255, 152, 0, 0.25)', borderColor: 'rgba(255, 152, 0, 0.5)' }]} onPress={() => onSelectMode("SLINGSHOT")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(255, 152, 0, 0.3)' }]}><Text style={{ fontSize: 30 }}>🏀</Text></View>
             <Text style={styles.cardTitle}>Sapan Basketi</Text>
             <Text style={styles.cardDesc}>Çek, nişan al ve potaya basket at!</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.modeCard, { backgroundColor: 'rgba(33, 150, 243, 0.25)', borderColor: 'rgba(33, 150, 243, 0.5)' }]} onPress={() => onSelectMode("LANE")}>
-          <View style={[styles.cardIconBg, { backgroundColor: 'rgba(33, 150, 243, 0.3)' }]}><Text style={{ fontSize: 30 }}>🎹</Text></View>
-          <View>
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(33, 150, 243, 0.25)', borderColor: 'rgba(33, 150, 243, 0.5)' }]} onPress={() => onSelectMode("LANE")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(33, 150, 243, 0.3)' }]}><Text style={{ fontSize: 30 }}>🎹</Text></View>
             <Text style={styles.cardTitle}>Şerit Değiştir</Text>
             <Text style={styles.cardDesc}>Kutuların yerini değiştir, atığı yakala.</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.modeCard, { backgroundColor: 'rgba(139, 195, 74, 0.25)', borderColor: 'rgba(139, 195, 74, 0.5)' }]} onPress={() => onSelectMode("SNAKE")}>
-          <View style={[styles.cardIconBg, { backgroundColor: 'rgba(139, 195, 74, 0.3)' }]}><Text style={{ fontSize: 30 }}>🐍</Text></View>
-          <View>
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(139, 195, 74, 0.25)', borderColor: 'rgba(139, 195, 74, 0.5)' }]} onPress={() => onSelectMode("SNAKE")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(139, 195, 74, 0.3)' }]}><Text style={{ fontSize: 30 }}>🐍</Text></View>
             <Text style={styles.cardTitle}>Yılan Oyunu</Text>
             <Text style={styles.cardDesc}>Atıkları topla, zararlılardan kaç!</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.modeCard, { backgroundColor: 'rgba(156, 39, 176, 0.25)', borderColor: 'rgba(156, 39, 176, 0.5)' }]} onPress={() => onSelectMode("MEMORY")}>
-          <View style={[styles.cardIconBg, { backgroundColor: 'rgba(156, 39, 176, 0.3)' }]}><Text style={{ fontSize: 30 }}>🧩</Text></View>
-          <View>
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(156, 39, 176, 0.25)', borderColor: 'rgba(156, 39, 176, 0.5)' }]} onPress={() => onSelectMode("MEMORY")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(156, 39, 176, 0.3)' }]}><Text style={{ fontSize: 30 }}>🧩</Text></View>
             <Text style={styles.cardTitle}>Hafıza Oyunu</Text>
             <Text style={styles.cardDesc}>Kartları eşleştir, hafızanı güçlendir!</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.modeCard, { backgroundColor: 'rgba(244, 67, 54, 0.25)', borderColor: 'rgba(244, 67, 54, 0.5)' }]} onPress={() => onSelectMode("MATH")}>
-          <View style={[styles.cardIconBg, { backgroundColor: 'rgba(244, 67, 54, 0.3)' }]}><Text style={{ fontSize: 30 }}>🧮</Text></View>
-          <View>
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(244, 67, 54, 0.25)', borderColor: 'rgba(244, 67, 54, 0.5)' }]} onPress={() => onSelectMode("MATH")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(244, 67, 54, 0.3)' }]}><Text style={{ fontSize: 30 }}>🧮</Text></View>
             <Text style={styles.cardTitle}>Matematik Oyunu</Text>
             <Text style={styles.cardDesc}>Kovadaki atıkları say, matematiğini güçlendir!</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.modeCard, { backgroundColor: 'rgba(63, 81, 181, 0.25)', borderColor: 'rgba(63, 81, 181, 0.5)' }]} onPress={() => onSelectMode("ENGLISH")}>
-          <View style={[styles.cardIconBg, { backgroundColor: 'rgba(63, 81, 181, 0.3)' }]}><Text style={{ fontSize: 30 }}>📚</Text></View>
-          <View>
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(63, 81, 181, 0.25)', borderColor: 'rgba(63, 81, 181, 0.5)' }]} onPress={() => onSelectMode("ENGLISH")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(63, 81, 181, 0.3)' }]}><Text style={{ fontSize: 30 }}>📚</Text></View>
             <Text style={styles.cardTitle}>İngilizce Kelime Oyunu</Text>
             <Text style={styles.cardDesc}>Geri dönüşüm yaparken İngilizce öğren!</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(0, 188, 212, 0.25)', borderColor: 'rgba(0, 188, 212, 0.5)' }]} onPress={() => onSelectMode("FLYBIRD")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(0, 188, 212, 0.3)' }]}><Text style={{ fontSize: 30 }}>🐦</Text></View>
+            <Text style={styles.cardTitle}>Uçan Kuş</Text>
+            <Text style={styles.cardDesc}>Çöp yığınlarından kaç, temiz uç!</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(255, 193, 7, 0.25)', borderColor: 'rgba(255, 193, 7, 0.5)' }]} onPress={() => onSelectMode("LANERUNNER")}>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(255, 193, 7, 0.3)' }]}><Text style={{ fontSize: 30 }}>🏃</Text></View>
+            <Text style={styles.cardTitle}>Koşucu Oyunu</Text>
+            <Text style={styles.cardDesc}>Şerit değiştir, atıkları topla!</Text>
+          </TouchableOpacity>
+        </View>
       </KeyboardScrollView>
     </View>
   );
@@ -161,19 +165,27 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.bgMid,
     textShadowRadius: 10,
   },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 15,
+    paddingHorizontal: 10,
+  },
   modeCard: {
-    width: '100%',
-    maxWidth: 380,
-    height: 100,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
-    flexDirection: 'row',
-    alignItems: 'center',
     padding: 20,
-    gap: 20,
-    alignSelf: 'center',
+  },
+  gridCard: {
+    width: 170,
+    height: 180,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
   cardIconBg: {
     width: 60,
@@ -183,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.accent },
-  cardDesc: { fontSize: 14, color: '#ddd', marginTop: 4 },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.accent, textAlign: 'center' },
+  cardDesc: { fontSize: 11, color: '#ddd', marginTop: 4, textAlign: 'center' },
 });
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, TextInput, ScrollView } from 'react-native';
 
 const BINS = [
   { id: 'glass', icon: '🍾', label: 'CAM', color: '#4ade80' },
@@ -251,7 +251,11 @@ export default function MathGame({ onBack }) {
 
       {/* Current Bin */}
       {phase === "RUNNING" && (
-        <View style={styles.gameArea}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.gameArea}
+          showsVerticalScrollIndicator={true}
+        >
           <Text style={styles.binTitle}>
             {BINS[currentBinIndex].icon} {BINS[currentBinIndex].label} KOVASI
           </Text>
@@ -316,7 +320,7 @@ export default function MathGame({ onBack }) {
               )}
             </View>
           )}
-        </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -376,10 +380,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
-  gameArea: {
+  scrollView: {
     flex: 1,
+  },
+  gameArea: {
     alignItems: 'center',
     padding: 20,
+    paddingBottom: 40,
   },
   binTitle: {
     fontSize: 24,

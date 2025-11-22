@@ -15,11 +15,43 @@ const BADGES = [
   { id: 'tree_49', icon: '🎋', title: 'Yeşil Efsane', requirement: 49 },
 ];
 
+// Seviye sistemi - puan bazlı
+const LEVELS = [
+  { level: 1, minScore: 0, maxScore: 99, title: 'Çevre Acemi', icon: '🌱', color: '#90EE90' },
+  { level: 2, minScore: 100, maxScore: 299, title: 'Doğa Öğrencisi', icon: '🌿', color: '#7CFC00' },
+  { level: 3, minScore: 300, maxScore: 599, title: 'Yeşil Savaşçı', icon: '🍀', color: '#32CD32' },
+  { level: 4, minScore: 600, maxScore: 999, title: 'Eko Koruyucu', icon: '🪴', color: '#228B22' },
+  { level: 5, minScore: 1000, maxScore: 1599, title: 'Orman Dostu', icon: '🌳', color: '#006400' },
+  { level: 6, minScore: 1600, maxScore: 2499, title: 'Çevre Kahramanı', icon: '🌲', color: '#4CAF50' },
+  { level: 7, minScore: 2500, maxScore: 3999, title: 'Doğa Muhafızı', icon: '🏞️', color: '#388E3C' },
+  { level: 8, minScore: 4000, maxScore: 5999, title: 'Eko Usta', icon: '🌴', color: '#2E7D32' },
+  { level: 9, minScore: 6000, maxScore: 8999, title: 'Yeşil Efendi', icon: '🎋', color: '#1B5E20' },
+  { level: 10, minScore: 9000, maxScore: 12999, title: 'Orman Kralı', icon: '👑', color: '#FFD700' },
+  { level: 11, minScore: 13000, maxScore: 17999, title: 'Gezegen Koruyucusu', icon: '🌍', color: '#00BCD4' },
+  { level: 12, minScore: 18000, maxScore: 24999, title: 'Doğa Efsanesi', icon: '⭐', color: '#FFC107' },
+  { level: 13, minScore: 25000, maxScore: 34999, title: 'Eko Tanrısı', icon: '✨', color: '#9C27B0' },
+  { level: 14, minScore: 35000, maxScore: 49999, title: 'Yeşil Mitoloji', icon: '🌟', color: '#E91E63' },
+  { level: 15, minScore: 50000, maxScore: 99999999, title: 'Doğanın Efendisi', icon: '🏆', color: '#FF5722' },
+];
+
+// Seviye hesaplama fonksiyonu
+const calculateLevel = (score) => {
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (score >= LEVELS[i].minScore) {
+      return LEVELS[i];
+    }
+  }
+  return LEVELS[0];
+};
+
 export default function ProfileScreen({ onBack }) {
   const [totalScore, setTotalScore] = useState(0);
   const [totalTrees, setTotalTrees] = useState(0);
   const [earnedBadges, setEarnedBadges] = useState([]);
   const [environmentHelp, setEnvironmentHelp] = useState(0);
+  const [currentLevel, setCurrentLevel] = useState(LEVELS[0]);
+  const [nextLevel, setNextLevel] = useState(LEVELS[1]);
+  const [levelProgress, setLevelProgress] = useState(0);
 
   useEffect(() => {
     loadProfile();
@@ -31,8 +63,29 @@ export default function ProfileScreen({ onBack }) {
       const forestData = await AsyncStorage.getItem('forestData');
       const badges = await AsyncStorage.getItem('earnedBadges');
 
+      let currentScore = 0;
       if (score) {
-        setTotalScore(parseInt(score));
+        currentScore = parseInt(score);
+        setTotalScore(currentScore);
+      }
+
+      // Seviye hesapla
+      const level = calculateLevel(currentScore);
+      setCurrentLevel(level);
+
+      // Bir sonraki seviyeyi bul
+      const nextLvl = LEVELS.find(l => l.level === level.level + 1);
+      if (nextLvl) {
+        setNextLevel(nextLvl);
+        // İlerleme yüzdesini hesapla
+        const currentLevelScore = currentScore - level.minScore;
+        const requiredScore = nextLvl.minScore - level.minScore;
+        const progress = Math.min((currentLevelScore / requiredScore) * 100, 100);
+        setLevelProgress(progress);
+      } else {
+        // Maksimum seviyedeyse
+        setNextLevel(null);
+        setLevelProgress(100);
       }
 
       if (forestData) {
@@ -73,11 +126,38 @@ export default function ProfileScreen({ onBack }) {
       >
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarIcon}>🌳</Text>
+          <View style={[styles.avatar, { borderColor: currentLevel.color }]}>
+            <Text style={styles.avatarIcon}>{currentLevel.icon}</Text>
           </View>
-          <Text style={styles.username}>Doğa Kahramanı</Text>
-          <Text style={styles.level}>Seviye {earnedBadges.length + 1}</Text>
+          <Text style={styles.username}>{currentLevel.title}</Text>
+          <Text style={styles.level}>Seviye {currentLevel.level}</Text>
+          
+          {/* Seviye İlerleme Barı */}
+          <View style={styles.levelProgressContainer}>
+            <View style={styles.levelProgressBar}>
+              <View 
+                style={[
+                  styles.levelProgressFill, 
+                  { width: `${levelProgress}%`, backgroundColor: currentLevel.color }
+                ]} 
+              />
+            </View>
+            <View style={styles.levelProgressInfo}>
+              <Text style={styles.levelProgressText}>
+                {totalScore} / {nextLevel ? nextLevel.minScore : '∞'} XP
+              </Text>
+              {nextLevel && (
+                <Text style={styles.nextLevelText}>
+                  Sonraki: {nextLevel.title} {nextLevel.icon}
+                </Text>
+              )}
+              {!nextLevel && (
+                <Text style={styles.maxLevelText}>
+                  ✨ Maksimum Seviye! ✨
+                </Text>
+              )}
+            </View>
+          </View>
         </View>
 
         {/* Stats Grid */}
@@ -223,7 +303,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 15,
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: '#4CAF50',
   },
   avatarIcon: {
@@ -238,6 +318,44 @@ const styles = StyleSheet.create({
   level: {
     fontSize: 16,
     color: '#a5d6a7',
+    marginBottom: 15,
+  },
+  levelProgressContainer: {
+    width: '100%',
+    marginTop: 10,
+  },
+  levelProgressBar: {
+    height: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 7,
+    overflow: 'hidden',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  levelProgressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 7,
+  },
+  levelProgressInfo: {
+    alignItems: 'center',
+  },
+  levelProgressText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 3,
+  },
+  nextLevelText: {
+    fontSize: 12,
+    color: '#ffd700',
+    fontWeight: '600',
+  },
+  maxLevelText: {
+    fontSize: 13,
+    color: '#ffd700',
+    fontWeight: 'bold',
   },
   statsGrid: {
     flexDirection: 'row',

@@ -1,6 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
 
+// Gökyüzü Arka Plan Bileşeni
+const SkyBackground = () => {
+  const { width, height } = Dimensions.get('window');
+  
+  // Sabit bulutlar (hareket yok, sadece bulut)
+  const clouds = [...Array(8)].map(() => ({
+    left: Math.random() * width,
+    top: Math.random() * height * 0.5,
+    size: Math.random() * 30 + 20,
+  }));
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {clouds.map((cloud, i) => (
+        <Text
+          key={i}
+          style={{
+            position: 'absolute',
+            fontSize: cloud.size,
+            left: cloud.left,
+            top: cloud.top,
+          }}
+        >
+          ☁️
+        </Text>
+      ))}
+    </View>
+  );
+};
+
 const ITEMS = [
   { id: 'plastic', icon: '🥤', label: 'Plastik' },
   { id: 'paper', icon: '📄', label: 'Kağıt' },
@@ -175,6 +205,7 @@ export default function MemoryGame({ onBack }) {
 
   return (
     <View style={styles.container}>
+      <SkyBackground />
       {/* Tutorial Modal */}
       {phase === "TUTORIAL" && (
         <View style={styles.tutorialOverlay}>
@@ -356,7 +387,7 @@ const Card = ({ card, isFlipped, onPress, size }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a4d2e',
+    backgroundColor: '#87CEEB', // Gökyüzü mavisi
     alignItems: 'center',
   },
   header: {
@@ -365,7 +396,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
     padding: 15,
-    backgroundColor: '#2d5f3f',
+    backgroundColor: 'rgba(135, 206, 250, 0.9)', // Açık mavi
   },
   backBtn: {
     padding: 8,
@@ -402,16 +433,16 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 10,
-    color: '#a5d6a7',
+    color: '#1E88E5', // Koyu mavi
     marginBottom: 2,
   },
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#0D47A1', // Daha koyu mavi
   },
   previewMessage: {
-    backgroundColor: 'rgba(255, 215, 0, 0.9)',
+    backgroundColor: 'rgba(255, 235, 59, 0.95)', // Sarı
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 20,
@@ -420,7 +451,7 @@ const styles = StyleSheet.create({
   previewText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a4d2e',
+    color: '#1565C0', // Mavi
   },
   grid: {
     flexDirection: 'row',
@@ -440,14 +471,14 @@ const styles = StyleSheet.create({
     backfaceVisibility: 'hidden',
   },
   cardBack: {
-    backgroundColor: '#4a7c59',
+    backgroundColor: '#64B5F6', // Açık gökyüzü mavisi
     borderWidth: 3,
-    borderColor: '#66BB6A',
+    borderColor: '#42A5F5', // Orta mavi
   },
   cardFront: {
     backgroundColor: '#fff',
     borderWidth: 3,
-    borderColor: '#4CAF50',
+    borderColor: '#2196F3', // Mavi
   },
   cardBackIcon: {
     opacity: 0.5,

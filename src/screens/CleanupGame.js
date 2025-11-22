@@ -4,6 +4,8 @@ import KeyboardScrollView from '../components/KeyboardScrollView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import soundManager from '../utils/sounds';
 import MemoryGame from './MemoryGame';
+import MathGame from './MathGame';
+import EnglishRecycleGame from './EnglishRecycleGame';
 
 // --- PREMIUM TEMA RENKLERİ ---
 const COLORS = {
@@ -227,7 +229,7 @@ const GameHUD = ({ score, time, lives, onBack }) => (
 
 // --- ANA BİLEŞEN ---
 export default function CleanupGame({ onExit }) {
-  const [gameMode, setGameMode] = useState("SELECTION"); // SELECTION | CLASSIC | SLINGSHOT | LANE | SNAKE | MEMORY
+  const [gameMode, setGameMode] = useState("SELECTION"); // SELECTION | CLASSIC | SLINGSHOT | LANE | SNAKE | MEMORY | MATH | ENGLISH
 
   return (
     <View style={{ flex: 1 }}>
@@ -240,6 +242,8 @@ export default function CleanupGame({ onExit }) {
       {gameMode === "LANE" && <CleanupGameLaneSwap onBack={() => setGameMode("SELECTION")} />}
       {gameMode === "SNAKE" && <SnakeGame onBack={() => setGameMode("SELECTION")} />}
       {gameMode === "MEMORY" && <MemoryGame onBack={() => setGameMode("SELECTION")} />}
+      {gameMode === "MATH" && <MathGame onBack={() => setGameMode("SELECTION")} />}
+      {gameMode === "ENGLISH" && <EnglishRecycleGame onBack={() => setGameMode("SELECTION")} />}
     </View>
   );
 }
@@ -299,6 +303,22 @@ function ModeSelectionScreen({ onSelectMode, onExit }) {
           <View>
             <Text style={styles.cardTitle}>Hafıza Oyunu</Text>
             <Text style={styles.cardDesc}>Kartları eşleştir, hafızanı güçlendir!</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("MATH")}>
+          <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>🧮</Text></View>
+          <View>
+            <Text style={styles.cardTitle}>Matematik Oyunu</Text>
+            <Text style={styles.cardDesc}>Kovadaki atıkları say, matematiğini güçlendir!</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.modeCard} onPress={() => onSelectMode("ENGLISH")}>
+          <View style={styles.cardIconBg}><Text style={{ fontSize: 30 }}>📚</Text></View>
+          <View>
+            <Text style={styles.cardTitle}>İngilizce Kelime Oyunu</Text>
+            <Text style={styles.cardDesc}>Geri dönüşüm yaparken İngilizce öğren!</Text>
           </View>
         </TouchableOpacity>
       </KeyboardScrollView>
@@ -376,7 +396,8 @@ function CleanupGameClassic({ onBack }) {
   }, [phase, score, lives]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#2d5f3f' }}> {/* Orman yeşili */}
+      <NatureBackground />
       {phase === "TUTORIAL" && (
         <TutorialModal 
           title="Klasik Ayrıştırma"
@@ -645,6 +666,58 @@ function CleanupGameSlingshot({ onBack }) {
   const gameW = isPortrait ? height : width;
   const gameH = isPortrait ? width : height;
 
+  // Çöl arka plan - kum tepeleri
+  const DesertBackground = () => {
+    return (
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {/* Kum tepeleri (dalgalı desenler) */}
+        <View style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: gameH * 0.4,
+        }}>
+          {/* Arka tepe */}
+          <View style={{
+            position: 'absolute',
+            bottom: gameH * 0.1,
+            left: -50,
+            width: gameW * 0.6,
+            height: gameH * 0.25,
+            backgroundColor: 'rgba(139, 90, 43, 0.3)',
+            borderTopLeftRadius: gameW * 0.3,
+            borderTopRightRadius: gameW * 0.3,
+          }} />
+          
+          {/* Orta tepe */}
+          <View style={{
+            position: 'absolute',
+            bottom: gameH * 0.05,
+            right: gameW * 0.1,
+            width: gameW * 0.5,
+            height: gameH * 0.2,
+            backgroundColor: 'rgba(139, 90, 43, 0.4)',
+            borderTopLeftRadius: gameW * 0.25,
+            borderTopRightRadius: gameW * 0.25,
+          }} />
+          
+          {/* Ön tepe */}
+          <View style={{
+            position: 'absolute',
+            bottom: 0,
+            left: gameW * 0.2,
+            width: gameW * 0.7,
+            height: gameH * 0.15,
+            backgroundColor: 'rgba(139, 90, 43, 0.5)',
+            borderTopLeftRadius: gameW * 0.35,
+            borderTopRightRadius: gameW * 0.35,
+          }} />
+        </View>
+      </View>
+    );
+  };
+
   // Fizik Ayarları (Kullanıcının istediği koddan uyarlandı)
   const SLING_CONFIG = {
     maxDrag: 150,
@@ -903,7 +976,8 @@ function CleanupGameSlingshot({ onBack }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
+    <View style={{ flex: 1, backgroundColor: '#C19A6B' }}> {/* Çöl rengi */}
+      <DesertBackground />
       <View style={containerStyle}>
         {phase === "TUTORIAL" && (
           <TutorialModal 
@@ -919,7 +993,6 @@ function CleanupGameSlingshot({ onBack }) {
             onStart={() => setPhase("RUNNING")}
           />
         )}
-        <NatureBackground />
         <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
         
         <View style={{ flex: 1 }} {...panResponder.panHandlers}>
@@ -999,6 +1072,63 @@ function CleanupGameLaneSwap({ onBack }) {
   const [lives, setLives] = useState(3);
   const [time, setTime] = useState(100);
   const [phase, setPhase] = useState("TUTORIAL"); // TUTORIAL, RUNNING, ENDED
+  
+  // Okyanus arka plan animasyonu - baloncuklar
+  const OceanBackground = () => {
+    const bubbles = useRef([...Array(10)].map(() => ({
+      anim: new Animated.Value(0),
+      left: Math.random() * width,
+      size: Math.random() * 20 + 10,
+      speed: Math.random() * 4000 + 3000,
+      delay: Math.random() * 2000,
+    }))).current;
+
+    useEffect(() => {
+      bubbles.forEach(b => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(b.delay),
+            Animated.timing(b.anim, {
+              toValue: 1,
+              duration: b.speed,
+              useNativeDriver: true,
+            }),
+            Animated.timing(b.anim, {
+              toValue: 0,
+              duration: 0,
+              useNativeDriver: true,
+            })
+          ])
+        ).start();
+      });
+    }, []);
+
+    return (
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {bubbles.map((b, i) => (
+          <Animated.View
+            key={i}
+            style={{
+              position: 'absolute',
+              left: b.left,
+              width: b.size,
+              height: b.size,
+              borderRadius: b.size / 2,
+              backgroundColor: 'rgba(255, 255, 255, 0.4)',
+              borderWidth: 2,
+              borderColor: 'rgba(255, 255, 255, 0.6)',
+              transform: [{
+                translateY: b.anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [height, -50]
+                })
+              }]
+            }}
+          />
+        ))}
+      </View>
+    );
+  };
   
   // Sabit kova sırası (değişmez)
   const binOrder = [...TRASH_TYPES]; // [plastic, paper, glass, metal, organic]
@@ -1131,8 +1261,8 @@ function CleanupGameLaneSwap({ onBack }) {
   }, [phase, binOrder, score, lives, height]);
 
   return (
-    <View style={{ flex: 1 }}>
-      <NatureBackground />
+    <View style={{ flex: 1, backgroundColor: '#006994' }}> {/* Okyanus mavisi */}
+      <OceanBackground />
       <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
       
       {/* Tutorial Ekranı */}

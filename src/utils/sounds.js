@@ -154,7 +154,7 @@ class SoundManager {
 const soundManager = new SoundManager();
 
 // Web ortamında otomatik başlat
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   // İlk kullanıcı etkileşiminde başlat (tarayıcı politikası)
   const initOnInteraction = () => {
     soundManager.init();

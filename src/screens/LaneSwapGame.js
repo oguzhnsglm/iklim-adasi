@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Platform, useWindowDimensions, StyleSheet, Text, Animated, Easing } from "react-native";
+import { View, Platform, useWindowDimensions, StyleSheet, Text, Animated, Easing, PanResponder } from "react-native";
 import soundManager from '../utils/sounds';
 import {
   TRASH_TYPES,
@@ -243,6 +243,45 @@ export default function LaneSwapGame({ onBack }) {
   const spawnTimerRef = useRef(0);
   const lastTimeRef = useRef(null);
 
+  // Swipe gesture için PanResponder
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => Platform.OS !== 'web' && phase === "RUNNING",
+      onMoveShouldSetPanResponder: () => Platform.OS !== 'web' && phase === "RUNNING",
+      onPanResponderRelease: (evt, gestureState) => {
+        if (Platform.OS === 'web' || phase !== "RUNNING" || items.length === 0) return;
+        
+        const { dx } = gestureState;
+        const minSwipeDistance = 30;
+        
+        // Sadece yatay kaydırma (sağ/sol)
+        if (Math.abs(dx) > minSwipeDistance) {
+          if (dx > 0) {
+            // Sağa kaydırma
+            setItems(prev => {
+              const updated = [...prev];
+              if (updated[0] && updated[0].lane < 4) {
+                updated[0] = { ...updated[0], lane: updated[0].lane + 1 };
+                soundManager.playScore();
+              }
+              return updated;
+            });
+          } else {
+            // Sola kaydırma
+            setItems(prev => {
+              const updated = [...prev];
+              if (updated[0] && updated[0].lane > 0) {
+                updated[0] = { ...updated[0], lane: updated[0].lane - 1 };
+                soundManager.playScore();
+              }
+              return updated;
+            });
+          }
+        }
+      }
+    })
+  ).current;
+
   const spawnItem = () => {
     const type = TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)];
     
@@ -361,7 +400,7 @@ export default function LaneSwapGame({ onBack }) {
 
   return (
     // Arka plan rengi okyanus mavisi ile uyumlu olacak şekilde güncellendi
-    <View style={{ flex: 1, backgroundColor: '#001e36' }}>
+    <View style={{ flex: 1, backgroundColor: '#001e36' }} {...panResponder.panHandlers}>
       <OceanBackground />
       <GameHUD score={score} time={time} lives={lives} onBack={onBack} />
       

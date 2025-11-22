@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Platform, useWindowDimensions, Text } from "react-native";
+import { View, Platform, useWindowDimensions, Text, PanResponder } from "react-native";
 import soundManager from '../utils/sounds';
 import {
   COLORS,
@@ -29,6 +29,48 @@ export default function SnakeRecycleGame({ onBack }) {
   const lastTimeRef = useRef(null);
   const hazardTimerRef = useRef(0);
   const moveIntervalRef = useRef(null);
+
+  // Swipe gesture için PanResponder
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => Platform.OS !== 'web' && phase === "RUNNING",
+      onMoveShouldSetPanResponder: () => Platform.OS !== 'web' && phase === "RUNNING",
+      onPanResponderRelease: (evt, gestureState) => {
+        if (Platform.OS === 'web' || phase !== "RUNNING") return;
+        
+        const { dx, dy } = gestureState;
+        const { dx: curDx, dy: curDy } = stateRef.current.direction;
+        
+        // Minimum swipe mesafesi
+        const minSwipeDistance = 30;
+        
+        // Yatay mı dikey mi kaydırma?
+        if (Math.abs(dx) > Math.abs(dy)) {
+          // Yatay kaydırma
+          if (Math.abs(dx) > minSwipeDistance && curDx === 0) {
+            if (dx > 0) {
+              // Sağa kaydırma
+              setNextDirection({ dx: 1, dy: 0 });
+            } else {
+              // Sola kaydırma
+              setNextDirection({ dx: -1, dy: 0 });
+            }
+          }
+        } else {
+          // Dikey kaydırma
+          if (Math.abs(dy) > minSwipeDistance && curDy === 0) {
+            if (dy > 0) {
+              // Aşağı kaydırma
+              setNextDirection({ dx: 0, dy: 1 });
+            } else {
+              // Yukarı kaydırma
+              setNextDirection({ dx: 0, dy: -1 });
+            }
+          }
+        }
+      }
+    })
+  ).current;
 
   useEffect(() => {
     stateRef.current = { phase, snake, direction: nextDirection, goodWaste, hazards, lives, score };
@@ -197,33 +239,7 @@ export default function SnakeRecycleGame({ onBack }) {
       
       <View 
         style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bgDeep }}
-        onStartShouldSetResponder={() => Platform.OS !== 'web' && phase === "RUNNING"}
-        onResponderRelease={(e) => {
-          if (Platform.OS === 'web' || phase !== "RUNNING") return;
-          
-          const { locationX, locationY } = e.nativeEvent;
-          const centerX = width / 2;
-          const centerY = height / 2;
-          
-          const dx = locationX - centerX;
-          const dy = locationY - centerY;
-          
-          const { dx: curDx, dy: curDy } = stateRef.current.direction;
-          
-          if (Math.abs(dx) > Math.abs(dy)) {
-            if (dx > 0 && curDx === 0) {
-              setNextDirection({ dx: 1, dy: 0 });
-            } else if (dx < 0 && curDx === 0) {
-              setNextDirection({ dx: -1, dy: 0 });
-            }
-          } else {
-            if (dy > 0 && curDy === 0) {
-              setNextDirection({ dx: 0, dy: 1 });
-            } else if (dy < 0 && curDy === 0) {
-              setNextDirection({ dx: 0, dy: -1 });
-            }
-          }
-        }}
+        {...panResponder.panHandlers}
       >
         <View style={{ 
           width: TILE_COUNT * GRID_SIZE, 

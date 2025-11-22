@@ -26,6 +26,8 @@ export default function FlyBirdGame({ onBack }) {
 
   // Klavye desteği
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const handleKeyPress = (e) => {
       if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();

@@ -27,7 +27,11 @@ export const TRASH_CONFIG = {
 };
 
 // Arka Plan Efektleri (Orman & Hayvanlar)
-export const NatureBackground = () => {
+export const NatureBackground = ({
+  intensity = 1,
+  baseColor = COLORS.bgDeep,
+  midColor = COLORS.bgMid
+} = {}) => {
   const { width, height } = useWindowDimensions();
   
   const elements = useRef(null);
@@ -74,8 +78,12 @@ export const NatureBackground = () => {
     };
   }, []);
 
+  const normalizedIntensity = Math.max(0, Math.min(1, intensity));
+  const visibleCount = normalizedIntensity <= 0 ? 0 : Math.max(1, Math.round(normalizedIntensity * elements.current.length));
+  const ambientOpacity = 0.2 + normalizedIntensity * 0.6;
+
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.bgDeep, overflow: 'hidden' }]}>
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: baseColor, overflow: 'hidden' }]}>
       <View style={{
         position: 'absolute',
         top: -height * 0.2,
@@ -83,8 +91,8 @@ export const NatureBackground = () => {
         width: width * 1.4,
         height: width * 1.4,
         borderRadius: width,
-        backgroundColor: COLORS.bgMid,
-        opacity: 0.5,
+        backgroundColor: midColor,
+        opacity: 0.2 + normalizedIntensity * 0.5,
         transform: [{ scaleX: 1.5 }]
       }} />
 
@@ -95,7 +103,8 @@ export const NatureBackground = () => {
         width: 60,
         height: height * 1.5,
         backgroundColor: 'rgba(255,255,255,0.08)',
-        transform: [{ rotate: '25deg' }]
+        transform: [{ rotate: '25deg' }],
+        opacity: 0.1 + normalizedIntensity * 0.4
       }} />
       <View style={{
         position: 'absolute',
@@ -104,10 +113,11 @@ export const NatureBackground = () => {
         width: 80,
         height: height * 1.5,
         backgroundColor: 'rgba(255,255,255,0.05)',
-        transform: [{ rotate: '20deg' }]
+        transform: [{ rotate: '20deg' }],
+        opacity: 0.08 + normalizedIntensity * 0.35
       }} />
 
-      {elements.current && elements.current.map((e, i) => (
+      {elements.current && elements.current.slice(0, visibleCount).map((e, i) => (
         <Animated.View
           key={i}
           style={{
@@ -124,7 +134,8 @@ export const NatureBackground = () => {
                 inputRange: [0, 1],
                 outputRange: ['0deg', '360deg']
               })
-            }]
+            }],
+            opacity: ambientOpacity
           }}
         >
           <Text style={{ fontSize: e.size }}>
@@ -142,7 +153,7 @@ export const NatureBackground = () => {
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'flex-end',
-        opacity: 0.3
+        opacity: 0.1 + normalizedIntensity * 0.6
       }}>
         <Text style={{ fontSize: 50 }}>🌲</Text>
         <Text style={{ fontSize: 40 }}>🦌</Text>

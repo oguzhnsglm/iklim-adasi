@@ -77,9 +77,9 @@ function ModeSelectionScreen({ onSelectMode, onExit }) {
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(139, 195, 74, 0.25)', borderColor: 'rgba(139, 195, 74, 0.5)' }]} onPress={() => onSelectMode("SNAKE")}>
-            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(139, 195, 74, 0.3)' }]}><Text style={{ fontSize: 30 }}>🐍</Text></View>
-            <Text style={styles.cardTitle}>Yılan Oyunu</Text>
-            <Text style={styles.cardDesc}>Atıkları topla, zararlılardan kaç!</Text>
+            <View style={[styles.cardIconBg, { backgroundColor: 'rgba(139, 195, 74, 0.3)' }]}><Text style={{ fontSize: 30 }}>🌍</Text></View>
+            <Text style={styles.cardTitle}>İklim Yılanı</Text>
+            <Text style={styles.cardDesc}>Yeşil öğeler topla, gezegeni koru!</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.modeCard, styles.gridCard, { backgroundColor: 'rgba(156, 39, 176, 0.25)', borderColor: 'rgba(156, 39, 176, 0.5)' }]} onPress={() => onSelectMode("MEMORY")}>

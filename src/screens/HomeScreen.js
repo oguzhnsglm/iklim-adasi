@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ForestScreen from './ForestScreen';
 import AchievementsScreen from './AchievementsScreen';
 import ProfileScreen from './ProfileScreen';
+import soundManager from '../utils/sounds';
 
 // Gelişmiş ana menü: Okyanus temalı arka plan, kartlar, birincil CTA
 export default function HomeScreen({ onPlay }) {
@@ -15,6 +16,16 @@ export default function HomeScreen({ onPlay }) {
   const [showAchievements, setShowAchievements] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
+
+  useEffect(() => {
+    soundManager.init();
+    return () => soundManager.stopBackgroundMusic();
+  }, []);
+
+  useEffect(() => {
+    soundManager.setEnabled(soundOn);
+    soundManager.setMusicEnabled(soundOn);
+  }, [soundOn]);
 
   // Günlük çevre bilgileri
   const dailyFacts = useMemo(

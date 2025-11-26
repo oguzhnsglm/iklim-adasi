@@ -12,8 +12,10 @@ Projeyi yerel ortamda calistirmak icin terminalde asagidaki adimlari uygulayin:
 
 ```bash
 npm install
-npx expo start
+npx expo start --tunnel
 ```
+
+> iOS kullanıyorsanız QR kodunu **Expo Go** uygulamasının içindeki tarayıcı ile okutun. Kamera uygulaması klasik `exp://` URL'lerini "kullanılacak veri yok" diyerek reddedebilir, `--tunnel` parametresi ise uygulamanın Expo Go'da sorunsuz açılmasını sağlar.
 
 ## Notlar
 - Kamera, konum ve bildirim fonksiyonlari su anda yalnizca mock olarak yer aliyor.

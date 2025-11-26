@@ -9,9 +9,14 @@ class SoundManager {
     this.enabled = true;
     this.musicEnabled = true;
     this.currentMusic = null;
+    this.isInitialized = false;
   }
 
   init() {
+    if (this.isInitialized) {
+      return;
+    }
+
     if (typeof window !== 'undefined' && window.AudioContext) {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       
@@ -23,6 +28,8 @@ class SoundManager {
       this.sfxGain = this.audioContext.createGain();
       this.sfxGain.gain.value = 0.5; // Efektler orta seviye
       this.sfxGain.connect(this.audioContext.destination);
+
+      this.isInitialized = true;
     }
   }
 
@@ -142,9 +149,9 @@ class SoundManager {
 
   setMusicEnabled(enabled) {
     this.musicEnabled = enabled;
-    if (!enabled) {
-      this.stopBackgroundMusic();
-    } else {
+    this.stopBackgroundMusic();
+
+    if (enabled) {
       this.playBackgroundMusic();
     }
   }
@@ -158,7 +165,13 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   // İlk kullanıcı etkileşiminde başlat (tarayıcı politikası)
   const initOnInteraction = () => {
     soundManager.init();
-    soundManager.playBackgroundMusic();
+    if (soundManager.audioContext && soundManager.audioContext.state === 'suspended') {
+      soundManager.audioContext.resume();
+    }
+
+    if (soundManager.musicEnabled) {
+      soundManager.setMusicEnabled(true);
+    }
     document.removeEventListener('click', initOnInteraction);
     document.removeEventListener('touchstart', initOnInteraction);
   };

@@ -9,7 +9,7 @@ import ClassicRecycleGame from './ClassicRecycleGame';
 import SlingshotGame from './SlingshotGame';
 import LaneSwapGame from './LaneSwapGame';
 import SnakeRecycleGame from './SnakeRecycleGame';
-import FlyBirdGame from './FlyBirdGame';
+import FlyBirdGame from './FlyBirdGameWebContent';
 import LaneRunnerGame from './LaneRunnerGame';
 
 const COLORS = {

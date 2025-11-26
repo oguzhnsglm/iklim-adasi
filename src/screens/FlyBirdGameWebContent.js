@@ -1,4 +1,8 @@
-const html = `<!DOCTYPE html>
+import React, { useCallback } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text, Platform } from 'react-native';
+import { WebView } from 'react-native-webview';
+
+const FlyBirdGameHtml = `<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
@@ -393,6 +397,41 @@ const html = `<!DOCTYPE html>
     (function() {
       'use strict';
 
+      // ============= SAFETY FALLBACKS =============
+      if (!window.performance) {
+        window.performance = { now: () => Date.now() };
+      } else if (!window.performance.now) {
+        window.performance.now = () => Date.now();
+      }
+
+      if (!window.requestAnimationFrame) {
+        window.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 16);
+      }
+
+      if (!window.cancelAnimationFrame) {
+        window.cancelAnimationFrame = (id) => clearTimeout(id);
+      }
+
+      const postNativeMessage = (type, payload = {}) => {
+        try {
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type, payload }));
+          }
+        } catch (error) {
+          // ignored
+        }
+      };
+
+      window.addEventListener('error', (event) => {
+        postNativeMessage('flybird-error', {
+          message: event.message,
+          line: event.lineno,
+          column: event.colno,
+          source: event.filename,
+          stack: event.error && event.error.stack ? event.error.stack : undefined
+        });
+      });
+
       // ============= MATH UTILITIES =============
       const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
       const lerp = (start, end, t) => start + (end - start) * t;
@@ -403,6 +442,26 @@ const html = `<!DOCTYPE html>
       // ============= STORAGE =============
       const SETTINGS_KEY = 'flappy:settings';
       const HIGHSCORE_KEY = 'flappy:highscore';
+      const storage = (() => {
+        try {
+          const testKey = '__flybird_storage_test__';
+          window.localStorage.setItem(testKey, '1');
+          window.localStorage.removeItem(testKey);
+          return window.localStorage;
+        } catch (error) {
+          console.warn('FlyBird localStorage disabled, using in-memory store.', error);
+          const memoryStore = {};
+          return {
+            getItem: (key) => (key in memoryStore ? memoryStore[key] : null),
+            setItem: (key, value) => {
+              memoryStore[key] = String(value);
+            },
+            removeItem: (key) => {
+              delete memoryStore[key];
+            }
+          };
+        }
+      })();
       
       const DIFFICULTY_PRESETS = {
         normal: { gravity: 1500, jumpImpulse: -420, pipeSpeed: 180, gapSize: 190 },
@@ -420,18 +479,23 @@ const html = `<!DOCTYPE html>
 
       const loadSettings = () => {
         try {
-          const raw = localStorage.getItem(SETTINGS_KEY);
+          const raw = storage.getItem(SETTINGS_KEY);
           if (!raw) return { ...DEFAULT_SETTINGS };
           const stored = JSON.parse(raw);
           return normalizeSettings(stored);
-        } catch {
+        } catch (error) {
+          console.warn('Settings load failed', error);
           return { ...DEFAULT_SETTINGS };
         }
       };
 
       const saveSettings = (settings) => {
         const normalized = normalizeSettings(settings);
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized));
+        try {
+          storage.setItem(SETTINGS_KEY, JSON.stringify(normalized));
+        } catch (error) {
+          console.warn('Settings save failed', error);
+        }
       };
 
       const applyDifficultyPreset = (settings, difficulty) => ({
@@ -454,15 +518,23 @@ const html = `<!DOCTYPE html>
       };
 
       const loadHighScore = () => {
-        const raw = localStorage.getItem(HIGHSCORE_KEY);
-        const value = raw ? parseInt(raw, 10) : 0;
-        return isFinite(value) ? value : 0;
+        try {
+          const raw = storage.getItem(HIGHSCORE_KEY);
+          if (!raw) return 0;
+          return Math.max(parseInt(raw, 10) || 0, 0);
+        } catch (error) {
+          console.warn('Highscore load failed', error);
+          return 0;
+        }
       };
 
-      const saveHighScore = (score) => {
-        localStorage.setItem(HIGHSCORE_KEY, String(Math.max(score, 0)));
-      };
-
+      function saveHighScore(score) {
+        try {
+          storage.setItem(HIGHSCORE_KEY, String(Math.max(score, 0)));
+        } catch (error) {
+          console.warn('Highscore save failed', error);
+        }
+      }
       // ============= AUDIO MANAGER =============
       class AudioManager {
         constructor(volume) {
@@ -522,8 +594,15 @@ const html = `<!DOCTYPE html>
 
         ensureContext() {
           if (this.context) return;
-          if (!window.AudioContext) return;
-          this.context = new AudioContext();
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          try {
+            this.context = new AudioCtx();
+          } catch (error) {
+            console.warn('AudioContext init failed', error);
+            this.context = null;
+            return;
+          }
           this.gainNode = this.context.createGain();
           this.gainNode.gain.value = this.volume;
           this.gainNode.connect(this.context.destination);
@@ -1395,6 +1474,14 @@ const html = `<!DOCTYPE html>
 
       let idleTime = 0;
 
+      const playSound = (key) => {
+        try {
+          audio.play(key);
+        } catch (error) {
+          console.warn('FlyBird sound failed:', key, error);
+        }
+      };
+
       function initialize() {
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT;
@@ -1409,31 +1496,32 @@ const html = `<!DOCTYPE html>
         stateMachine.set('MENU');
         showMenu('Flappy Bird ++', 'Oyna');
         debugOverlay.setVisible(settings.debug);
+        postNativeMessage('flybird-ready');
       }
 
       function bindUi() {
         playButton.addEventListener('click', () => {
-          audio.play('click');
+          playSound('click');
           startGame();
         });
 
         pauseButton.addEventListener('click', () => {
-          audio.play('click');
+          playSound('click');
           togglePause();
         });
 
         restartButton.addEventListener('click', () => {
-          audio.play('click');
+          playSound('click');
           restartGame();
         });
 
         settingsToggle.addEventListener('click', () => {
-          audio.play('click');
+          playSound('click');
           controlsPanel.toggle(true);
         });
 
         menuPlayButton.addEventListener('click', () => {
-          audio.play('click');
+          playSound('click');
           if (stateMachine.is('MENU') || stateMachine.is('GAMEOVER')) {
             startGame();
           } else if (stateMachine.is('PAUSE')) {
@@ -1442,7 +1530,7 @@ const html = `<!DOCTYPE html>
         });
 
         retryButton.addEventListener('click', () => {
-          audio.play('click');
+          playSound('click');
           restartGame();
         });
       }
@@ -1489,7 +1577,7 @@ const html = `<!DOCTYPE html>
         }
         if (stateMachine.is('PLAYING')) {
           bird.flap();
-          audio.play('flap');
+          playSound('flap');
         }
       }
 
@@ -1514,12 +1602,12 @@ const html = `<!DOCTYPE html>
             for (let i = 0; i < gained; i++) {
               const { score, highScore } = scoreManager.increment();
               updateScoreboard(score, highScore);
-              audio.play('score');
+              playSound('score');
             }
           }
 
           if (detectCollision(hitboxes)) {
-            audio.play('hit');
+            playSound('hit');
             handleGameOver();
           }
         } else if (stateMachine.is('MENU')) {
@@ -1646,4 +1734,93 @@ const html = `<!DOCTYPE html>
 </body>
 </html>
 `;
-export default html;
+
+const GAME_SOURCE = { html: FlyBirdGameHtml, baseUrl: '' };
+const isWeb = Platform.OS === 'web';
+
+function FlyBirdGame({ onBack }) {
+  const handleMessage = useCallback((event) => {
+    const { data } = event.nativeEvent || {};
+    if (!data) return;
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed?.type === 'flybird-error') {
+        console.warn('FlyBirdGame error:', parsed.payload || parsed);
+      }
+    } catch (error) {
+      console.warn('FlyBirdGame message parse failed:', data, error);
+    }
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      {isWeb ? (
+        <View style={styles.webview}>
+          <iframe
+            title="Fly Bird Game"
+            srcDoc={FlyBirdGameHtml}
+            style={iframeStyle}
+            sandbox="allow-scripts allow-same-origin allow-pointer-lock"
+          />
+        </View>
+      ) : (
+        <WebView
+          originWhitelist={['*']}
+          source={GAME_SOURCE}
+          style={styles.webview}
+          javaScriptEnabled
+          domStorageEnabled
+          allowFileAccess
+          allowsInlineMediaPlayback
+          allowsFullscreenVideo
+          allowUniversalAccessFromFileURLs
+          mixedContentMode="always"
+          startInLoadingState
+          setSupportMultipleWindows={false}
+          mediaPlaybackRequiresUserAction={false}
+          androidLayerType="hardware"
+          onMessage={handleMessage}
+        />
+      )}
+      {onBack ? (
+        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.8}>
+          <Text style={styles.backButtonText}>{'<- Geri'}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000'
+  },
+  webview: {
+    flex: 1
+  },
+  backButton: {
+    position: 'absolute',
+    top: 24,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20
+  },
+  backButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16
+  }
+});
+
+const iframeStyle = {
+  border: '0',
+  width: '100%',
+  height: '100%',
+  flex: 1
+};
+
+export default FlyBirdGame;
+export { FlyBirdGameHtml };

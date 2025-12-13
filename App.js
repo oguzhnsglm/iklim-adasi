@@ -1,29 +1,54 @@
-import React, { useState } from "react";
+import React, { useRef } from "react";
 import { SafeAreaView, StatusBar, StyleSheet, View } from "react-native";
-import HomeScreen from "./src/screens/HomeScreen";
 import CleanupGame from "./src/screens/CleanupGame";
 import { THEME } from "./src/theme";
+import { ThemeProgressProvider } from "./src/ThemeProgressContext";
+import { ParentSettingsProvider, useParentSettings } from "./src/ParentSettingsContext";
+import { MascotProvider } from "./src/context/MascotContext";
 
-// Ekran durumları: Ana Sayfa veya Oyun
-const SCREENS = {
-  HOME: "HOME",
-  GAME: "GAME",
-};
+function AppInner() {
+  const sessionStartRef = useRef(null);
+  const { ensureCanPlayOrAlert, recordSessionMinutes } = useParentSettings();
 
-export default function App() {
-  const [screen, setScreen] = useState(SCREENS.HOME);
+  const handleSessionStart = () => {
+    if (!ensureCanPlayOrAlert()) return false;
+    if (!sessionStartRef.current) {
+      sessionStartRef.current = Date.now();
+    }
+    return true;
+  };
+
+  const handleSessionEnd = () => {
+    if (sessionStartRef.current) {
+      const diffMs = Date.now() - sessionStartRef.current;
+      const minutes = diffMs / 60000;
+      recordSessionMinutes(Math.round(minutes));
+      sessionStartRef.current = null;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.container}>
-        {screen === SCREENS.HOME ? (
-          <HomeScreen onPlay={() => setScreen(SCREENS.GAME)} />
-        ) : (
-          <CleanupGame onExit={() => setScreen(SCREENS.HOME)} />
-        )}
+        <CleanupGame
+          onRequestSessionStart={handleSessionStart}
+          onSessionEnd={handleSessionEnd}
+        />
       </View>
     </SafeAreaView>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProgressProvider>
+      <ParentSettingsProvider>
+        <MascotProvider>
+          <AppInner />
+        </MascotProvider>
+      </ParentSettingsProvider>
+    </ThemeProgressProvider>
   );
 }
 

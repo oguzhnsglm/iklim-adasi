@@ -1,12 +1,34 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { Alert, StyleSheet, Text, TouchableOpacity, View, Animated } from "react-native";
 import KeyboardScrollView from '../components/KeyboardScrollView';
 import { THEME } from "../theme";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ForestScreen from './ForestScreen';
 import AchievementsScreen from './AchievementsScreen';
 import ProfileScreen from './ProfileScreen';
+import ParentModeScreen from './ParentModeScreen';
+import ThemeTasksScreen from './ThemeTasksScreen';
 import soundManager from '../utils/sounds';
+import { useThemeProgress } from "../ThemeProgressContext";
+import ThemeTransitionOverlay from "../components/ThemeTransitionOverlay";
+
+const THEME_TASKS = {
+  forest: [
+    { id: 'forest-1', title: 'Ağaç dik ve ormanı büyüt' },
+    { id: 'forest-2', title: 'Ormandaki çöpleri temizle' },
+    { id: 'forest-3', title: 'Hayvanların yuvalarını koru' },
+  ],
+  sea: [
+    { id: 'sea-1', title: 'Dalgaların getirdiği atıkları topla' },
+    { id: 'sea-2', title: 'Deniz altı canlılarını keşfet' },
+    { id: 'sea-3', title: 'Mercan resiflerini koru' },
+  ],
+  snow: [
+    { id: 'snow-1', title: 'Kar tanelerini biriktir' },
+    { id: 'snow-2', title: 'Kış sporları yaparken doğayı koru' },
+    { id: 'snow-3', title: 'Kutup hayvanları için güvenli alan oluştur' },
+  ],
+};
 
 // Gelişmiş ana menü: Okyanus temalı arka plan, kartlar, birincil CTA
 export default function HomeScreen({ onPlay }) {
@@ -15,7 +37,14 @@ export default function HomeScreen({ onPlay }) {
   const [showForest, setShowForest] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showParentMode, setShowParentMode] = useState(false);
+  const [showThemeTasks, setShowThemeTasks] = useState(false);
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
+  const { themes, activeTheme, setActiveTheme } = useThemeProgress();
+  const [transitionTarget, setTransitionTarget] = useState(null);
+  const [activeTab, setActiveTab] = useState("GAMES");
+  const panelAnim = useRef(new Animated.Value(1)).current;
+  const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
     soundManager.init();
@@ -116,6 +145,11 @@ export default function HomeScreen({ onPlay }) {
 
   const tipOfDay = useMemo(() => tips[Math.floor(Math.random() * tips.length)], [tips]);
 
+  const currentTasks = useMemo(
+    () => THEME_TASKS[activeTheme.id] || [],
+    [activeTheme.id]
+  );
+
   // Toplam puanı yükle
   useEffect(() => {
     loadTotalScore();
@@ -142,11 +176,47 @@ export default function HomeScreen({ onPlay }) {
 
   const loadTotalScore = async () => {
     try {
-      // Her zaman 100k puan yükle
-      await AsyncStorage.setItem('totalScore', '100000');
-      setTotalScore(100000);
+      const stored = await AsyncStorage.getItem('totalScore');
+      const value = parseInt(stored || '0', 10);
+      setTotalScore(isNaN(value) ? 0 : value);
     } catch (error) {
       console.log('Total score load error:', error);
+    }
+  };
+
+  const animatePanelChange = (nextTab) => {
+    if (nextTab === activeTab) return;
+    Animated.timing(panelAnim, {
+      toValue: 0,
+      duration: 140,
+      useNativeDriver: true,
+    }).start(() => {
+      setActiveTab(nextTab);
+      Animated.timing(panelAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
+  const handleSelectTheme = (themeId) => {
+    if (themeId === activeTheme.id) return;
+    const theme = themes.find(t => t.id === themeId);
+    if (!theme || !theme.unlocked) {
+      Alert.alert(
+        "Tema Kilitli",
+        "Bu temayı açmak için önce orman temasını tamamen temizlemelisin!"
+      );
+      return;
+    }
+    setTransitionTarget(themeId);
+  };
+
+  const handleTransitionFinished = () => {
+    if (transitionTarget) {
+      setActiveTheme(transitionTarget);
+      setTransitionTarget(null);
     }
   };
 
@@ -165,9 +235,22 @@ export default function HomeScreen({ onPlay }) {
     return <ProfileScreen onBack={() => setShowProfile(false)} />;
   }
 
+  if (showParentMode) {
+    return <ParentModeScreen onBack={() => setShowParentMode(false)} />;
+  }
+
+  if (showThemeTasks) {
+    return <ThemeTasksScreen onBack={() => setShowThemeTasks(false)} />;
+  }
+
   return (
-    <View style={styles.root}>
-      <NatureSplash />
+    <View style={[styles.root, darkMode && styles.rootDark]}>
+      <ThemeTransitionOverlay
+        visible={!!transitionTarget}
+        targetThemeId={transitionTarget || undefined}
+        onFinished={handleTransitionFinished}
+      />
+      <NatureSplash themeId={activeTheme.id} />
 
       <KeyboardScrollView 
         style={{ flex: 1 }} 
@@ -175,15 +258,55 @@ export default function HomeScreen({ onPlay }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.brandTop}>DOĞAYI</Text>
+          <View style={styles.headerTopRow}>
+            <Text style={styles.brandTop}>DOĞAYI</Text>
+            <View style={styles.topRightMenu}>
+              <TouchableOpacity onPress={() => setShowProfile(true)}>
+                <Text style={styles.topRightIcon}>👤</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowParentMode(true)}>
+                <Text style={styles.topRightIcon}>👨‍👩‍👧</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setDarkMode((v) => !v)}>
+                <Text style={styles.topRightIcon}>{darkMode ? '🌙' : '☀️'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
           <Text style={styles.brandBottom}>KORU</Text>
+          <View style={styles.themePill}>
+            <Text style={styles.themePillIcon}>{activeTheme.icon}</Text>
+            <Text style={styles.themePillText}>{activeTheme.name} Teması</Text>
+          </View>
           <View style={styles.totalScoreBox}>
             <Text style={styles.totalScoreLabel}>Toplam Puanım</Text>
             <Text style={styles.totalScoreValue}>⭐ {totalScore}</Text>
           </View>
         </View>
 
-        {/* Daily Environmental Fact */}
+        <View style={styles.tabSwitcher}>
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === "GAMES" && styles.tabChipActive]}
+            onPress={() => animatePanelChange("GAMES")}
+          >
+            <Text
+              style={[styles.tabChipText, activeTab === "GAMES" && styles.tabChipTextActive]}
+            >
+              Oyunlar
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === "THEMES" && styles.tabChipActive]}
+            onPress={() => animatePanelChange("THEMES")}
+          >
+            <Text
+              style={[styles.tabChipText, activeTab === "THEMES" && styles.tabChipTextActive]}
+            >
+              Temalar
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Günün bilgisi her iki sekmede de gösterilsin */}
         <View style={styles.dailyFactContainer}>
           <View style={styles.dailyFactHeader}>
             <Text style={styles.dailyFactBadge}>💡 GÜNÜN BİLGİSİ</Text>
@@ -191,73 +314,217 @@ export default function HomeScreen({ onPlay }) {
           <Text style={styles.dailyFactText}>{factOfDay}</Text>
         </View>
 
-        <View style={styles.panel}>
-          <Text style={styles.subtitle}>"{tipOfDay}"</Text>
+        {activeTab === "GAMES" && (
+          <Animated.View
+            style={[
+              styles.panel,
+              {
+                opacity: panelAnim,
+                transform: [
+                  {
+                    translateY: panelAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.panelRow}>
+              <View style={styles.sideRail}>
+                <Text style={styles.sideRailLabel}>Aktif Tema</Text>
+                <Text style={styles.sideRailThemeName}>{activeTheme.name}</Text>
+                <Text style={styles.sideRailItemText}>
+                  🎯 Görevler: {activeTheme.completedLevels}/{activeTheme.maxLevels}
+                </Text>
+                <Text style={styles.sideRailItemText}>
+                  🏅 Rozetler: {activeTheme.badges.length}
+                </Text>
+                {currentTasks.slice(0, 3).map((task) => (
+                  <Text key={task.id} style={styles.sideRailTaskText}>
+                    • {task.title}
+                  </Text>
+                ))}
+                <TouchableOpacity
+                  style={styles.sideRailButton}
+                  onPress={() => setShowThemeTasks(true)}
+                >
+                  <Text style={styles.sideRailButtonText}>🎯 Görevler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.sideRailButton}
+                  onPress={() => setShowAchievements(true)}
+                >
+                  <Text style={styles.sideRailButtonText}>🏅 Rozetler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.sideRailButton}
+                  onPress={() => setShowForest(true)}
+                >
+                  <Text style={styles.sideRailButtonText}>🧹 Temizleme</Text>
+                </TouchableOpacity>
+              </View>
 
-          <TouchableOpacity style={styles.primaryCta} onPress={onPlay}>
-            <Text style={styles.primaryCtaIcon}>▶</Text>
-            <Text style={styles.primaryCtaText}>Hemen Başla</Text>
-          </TouchableOpacity>
+              <View style={styles.mainColumn}>
+                <View style={styles.leftRail}>
+                  <Text style={styles.leftRailTitle}>{activeTheme.name}</Text>
+                  <Text style={styles.leftRailText}>
+                    Görevler: {activeTheme.completedLevels}/{activeTheme.maxLevels} · Rozet: {activeTheme.badges.length}
+                  </Text>
+                </View>
 
-          <View style={styles.cards}>
-            <MenuCard icon="🎮" title="Oyun Modları" desc="Eğlenceye katıl, doğayı kurtar!" onPress={onPlay} />
-            <MenuCard 
-              icon="🌲" 
-              title="Ormanım" 
-              desc="Ağaç dik, orman yetiştir" 
-              onPress={() => setShowForest(true)} 
-            />
-            <MenuCard
-              icon="🏆"
-              title="Başarılarım"
-              desc="Rozetler ve görevler"
-              onPress={() => setShowAchievements(true)}
-            />
-            <MenuCard
-              icon="👤"
-              title="Profilim"
-              desc="İstatistikler ve ilerleme"
-              onPress={() => setShowProfile(true)}
-            />
-          </View>
+                <Text style={styles.subtitle}>"{tipOfDay}"</Text>
 
-          <View style={styles.footerRow}>
-            <TouchableOpacity
-              style={styles.secondaryBtn}
-              onPress={() => setSoundOn((v) => !v)}
-            >
-              <Text style={styles.secondaryBtnText}>
-                {soundOn ? "🔊 Sesler Açık" : "🔈 Sesler Kapalı"}
+                <TouchableOpacity style={styles.primaryCta} onPress={onPlay}>
+                  <Text style={styles.primaryCtaIcon}>▶</Text>
+                  <Text style={styles.primaryCtaText}>Hemen Başla</Text>
+                </TouchableOpacity>
+
+                <View style={styles.cards}>
+                  <MenuCard icon="🎮" title="Oyun Modları" desc="Tüm oyun modlarını keşfet" onPress={onPlay} />
+                  <MenuCard 
+                    icon="🌲" 
+                    title="Ormanım" 
+                    desc="Ağaç dik, orman yetiştir" 
+                    onPress={() => setShowForest(true)} 
+                  />
+                  <MenuCard
+                    icon="🏆"
+                    title="Başarılarım"
+                    desc="Rozetler ve görevler"
+                    onPress={() => setShowAchievements(true)}
+                  />
+                  <MenuCard
+                    icon="👤"
+                    title="Profilim"
+                    desc="İstatistikler ve ilerleme"
+                    onPress={() => setShowProfile(true)}
+                  />
+                </View>
+
+                <View style={styles.footerRow}>
+                  <TouchableOpacity
+                    style={styles.secondaryBtn}
+                    onPress={() => setSoundOn((v) => !v)}
+                  >
+                    <Text style={styles.secondaryBtnText}>
+                      {soundOn ? "🔊 Sesler Açık" : "🔈 Sesler Kapalı"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
+        {activeTab === "THEMES" && (
+          <Animated.View
+            style={[
+              styles.panel,
+              {
+                opacity: panelAnim,
+                transform: [
+                  {
+                    translateY: panelAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.themeRowHeader}>
+              <Text style={styles.themeRowTitle}>Temalar</Text>
+              <Text style={styles.themeRowSubtitle}>
+                Her temanın atmosferini keşfet ve seçimini yap
               </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+            </View>
+
+            <View style={styles.themeProgressContainer}>
+              <Text style={styles.themeProgressTitle}>Aktif Tema Seviye İlerlemesi</Text>
+              <View style={styles.themeProgressBar}>
+                <View
+                  style={[
+                    styles.themeProgressFill,
+                    { width: `${Math.round((activeTheme.progressRatio || 0) * 100)}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.themeProgressText}>
+                Seviye {activeTheme.completedLevels}/{activeTheme.maxLevels} · Rozet {activeTheme.badges.length}
+              </Text>
+            </View>
+
+            <View style={styles.cards}>
+              {themes.map((theme) => (
+                <MenuCard
+                  key={theme.id}
+                  icon={theme.icon}
+                  title={theme.name}
+                  desc={`${theme.completedLevels}/${theme.maxLevels} seviye · ${theme.badges.length} rozet`}
+                  locked={!theme.unlocked}
+                  accent={theme.id === activeTheme.id}
+                  onPress={() => handleSelectTheme(theme.id)}
+                />
+              ))}
+            </View>
+          </Animated.View>
+        )}
       </KeyboardScrollView>
     </View>
   );
 }
 
-function NatureSplash() {
+function NatureSplash({ themeId }) {
+  // Basit tema kapak efektleri: orman için yeşil tonlu halkalar,
+  // deniz için mavi dalga tonları, kar için buzlu mavi-beyaz halkalar.
+  const isForest = themeId === 'forest';
+  const isSea = themeId === 'sea';
+  const isSnow = themeId === 'snow';
+
+  const bigColor = isForest ? '#A5D6A7' : isSea ? THEME.wave : '#BBDEFB';
+  const midColor = isForest ? '#66BB6A' : isSea ? THEME.tide : '#90CAF9';
+  const smallColor = isForest ? '#C8E6C9' : isSea ? THEME.sand : '#E3F2FD';
+
   return (
     <View style={StyleSheet.absoluteFill}>
-      <View style={styles.treeBig} />
-      <View style={styles.treeMid} />
-      <View style={styles.treeSmall} />
+      <View style={[styles.treeBig, { backgroundColor: bigColor }]} />
+      <View style={[styles.treeMid, { backgroundColor: midColor }]} />
+      <View style={[styles.treeSmall, { backgroundColor: smallColor }]} />
     </View>
   );
 }
 
-function MenuCard({ icon, title, desc, onPress }) {
+function MenuCard({ icon, title, desc, onPress, locked, accent }) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
+    <TouchableOpacity
+      style={[
+        styles.card,
+        locked && styles.cardLocked,
+        accent && styles.cardAccent,
+      ]}
+      onPress={locked ? undefined : onPress}
+      activeOpacity={locked ? 1 : 0.9}
+    >
       <View style={styles.cardIconWrap}>
         <Text style={styles.cardIcon}>{icon}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardDesc}>{desc}</Text>
+        <Text style={[styles.cardTitle, accent && styles.cardTitleAccent]}>
+          {title}
+        </Text>
+        <Text
+          style={[
+            styles.cardDesc,
+            locked && styles.cardDescLocked,
+          ]}
+        >
+          {locked ? "Kilitli - Önce ormanı temizle" : desc}
+        </Text>
       </View>
-      <Text style={styles.cardChevron}>›</Text>
+      <Text style={styles.cardChevron}>{locked ? "🔒" : "›"}</Text>
     </TouchableOpacity>
   );
 }
@@ -267,10 +534,69 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: THEME.background,
   },
+  rootDark: {
+    backgroundColor: '#020617',
+  },
   header: {
     paddingTop: 40,
     paddingBottom: 8,
     alignItems: "center",
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 24,
+  },
+  topRightMenu: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  topRightIcon: {
+    fontSize: 20,
+  },
+  themePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginTop: 12,
+  },
+  themePillIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  themePillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.deepSea,
+  },
+  tabSwitcher: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    marginTop: 16,
+    padding: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+  },
+  tabChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  tabChipActive: {
+    backgroundColor: THEME.accent,
+  },
+  tabChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: THEME.deepSea,
+  },
+  tabChipTextActive: {
+    color: THEME.textLight,
   },
   totalScoreBox: {
     marginTop: 12,
@@ -304,6 +630,36 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: THEME.wave,
     letterSpacing: 6,
+  },
+  themeProgressContainer: {
+    marginHorizontal: 20,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  themeProgressTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.deepSea,
+    marginBottom: 6,
+  },
+  themeProgressBar: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    overflow: 'hidden',
+  },
+  themeProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: THEME.accent,
+  },
+  themeProgressText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: THEME.deepSea,
   },
   dailyFactContainer: {
     margin: 20,
@@ -377,15 +733,102 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   cards: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  themeRowHeader: {
+    marginBottom: 4,
+  },
+  themeRowTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.deepSea,
+  },
+  themeRowSubtitle: {
+    fontSize: 12,
+    color: THEME.wave,
+  },
+  leftRail: {
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  leftRailTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: THEME.deepSea,
+  },
+  leftRailText: {
     marginTop: 4,
-    gap: 10,
+    fontSize: 12,
+    color: THEME.textDark,
+  },
+  panelRow: {
+    flexDirection: 'row',
+  },
+  sideRail: {
+    width: 120,
+    marginRight: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  sideRailLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.wave,
+    marginBottom: 4,
+  },
+  sideRailThemeName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.deepSea,
+    marginBottom: 8,
+  },
+  sideRailItemText: {
+    fontSize: 11,
+    color: THEME.textDark,
+    marginBottom: 4,
+  },
+  sideRailTaskText: {
+    fontSize: 11,
+    color: THEME.textDark,
+  },
+  sideRailButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(76,175,80,0.15)',
+    alignItems: 'center',
+  },
+  sideRailButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.deepSea,
+  },
+  mainColumn: {
+    flex: 1,
   },
   card: {
+    width: '48%',
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.7)",
     padding: 14,
     borderRadius: 16,
+  },
+  cardLocked: {
+    opacity: 0.6,
+  },
+  cardAccent: {
+    borderWidth: 2,
+    borderColor: THEME.accent,
+    backgroundColor: "rgba(76, 175, 80, 0.12)",
   },
   cardIconWrap: {
     width: 42,

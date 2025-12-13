@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions, Animated, Easing, Platform } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import soundManager from '../utils/sounds';
+import { useThemeProgress } from "../ThemeProgressContext";
 
 export const COLORS = {
   bgDeep: "#1a4d2e",
@@ -247,6 +248,8 @@ export const GameHUD = ({ score, time, lives, onBack }) => (
 // Game Over Modal
 export const GameOverModal = ({ score, onRestart, onMenu }) => {
   const [saved, setSaved] = useState(false);
+  const [badgeType, setBadgeType] = useState(null);
+  const { registerScore, registerLevelResult } = useThemeProgress();
 
   useEffect(() => {
     if (!saved) {
@@ -258,9 +261,15 @@ export const GameOverModal = ({ score, onRestart, onMenu }) => {
 
   const saveScore = async () => {
     try {
+      // Puanı global toplam puana ekle ve aktif temanın çevre temizliğine yansıt
       const currentTotal = await AsyncStorage.getItem('totalScore');
       const newTotal = (parseInt(currentTotal, 10) || 0) + score;
       await AsyncStorage.setItem('totalScore', newTotal.toString());
+      registerScore(score);
+      // Seviye rozetini belirle ve kaydet
+      const badge = score >= 700 ? 'gold' : score >= 300 ? 'silver' : 'bronze';
+      setBadgeType(badge);
+      registerLevelResult(badge);
       console.log('Score saved:', score, 'Total:', newTotal);
     } catch (error) {
       console.log('Error saving score:', error);
@@ -273,7 +282,12 @@ export const GameOverModal = ({ score, onRestart, onMenu }) => {
         <Text style={{ color: 'white', fontSize: 24, marginBottom: 10 }}>Oyun Bitti</Text>
         <Text style={{ color: '#ccc', fontSize: 16 }}>Bu Oyun Skoru</Text>
         <Text style={{ color: COLORS.accent, fontSize: 48, fontWeight: '900', marginVertical: 20 }}>{score}</Text>
-        <Text style={{ color: '#4ade80', fontSize: 14, marginBottom: 10 }}>✓ Toplam puanınıza eklendi!</Text>
+        <Text style={{ color: '#4ade80', fontSize: 14, marginBottom: 6 }}>✓ Toplam puanınıza eklendi!</Text>
+        {badgeType && (
+          <Text style={{ color: '#fde68a', fontSize: 16, marginBottom: 12 }}>
+            🎖️ Kazandığın rozet: {badgeType === 'gold' ? 'Altın' : badgeType === 'silver' ? 'Gümüş' : 'Bronz'}
+          </Text>
+        )}
         <TouchableOpacity style={styles.btnAction} onPress={onRestart}>
           <Text style={styles.btnText}>Tekrar Oyna</Text>
         </TouchableOpacity>

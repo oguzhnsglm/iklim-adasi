@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions, Animated
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import soundManager from '../utils/sounds';
 import { useThemeProgress } from "../ThemeProgressContext";
+import { useMascot } from "../context/MascotContext";
 
 export const COLORS = {
   bgDeep: "#1a4d2e",
@@ -250,6 +251,7 @@ export const GameOverModal = ({ score, onRestart, onMenu }) => {
   const [saved, setSaved] = useState(false);
   const [badgeType, setBadgeType] = useState(null);
   const { registerScore, registerLevelResult } = useThemeProgress();
+  const { celebrate } = useMascot();
 
   useEffect(() => {
     if (!saved) {
@@ -270,6 +272,8 @@ export const GameOverModal = ({ score, onRestart, onMenu }) => {
       const badge = score >= 700 ? 'gold' : score >= 300 ? 'silver' : 'bronze';
       setBadgeType(badge);
       registerLevelResult(badge);
+      // Oyun/Seviye tamamlandığında maskot kutlaması
+      celebrate('questCompleted');
       console.log('Score saved:', score, 'Total:', newTotal);
     } catch (error) {
       console.log('Error saving score:', error);

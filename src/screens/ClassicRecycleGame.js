@@ -9,6 +9,7 @@ import {
   GameHUD,
   GameOverModal
 } from './GameComponents';
+import { useMascot } from '../context/MascotContext';
 
 // --- TEKİL BALIK BİLEŞENİ (Kendi döngüsü var) ---
 const SwimmingFish = ({ width, height }) => {
@@ -254,6 +255,7 @@ export default function ClassicRecycleGame({ onBack }) {
   const [time, setTime] = useState(120);
   const [items, setItems] = useState([]);
   const [phase, setPhase] = useState("TUTORIAL");
+  const { celebrate } = useMascot();
 
   const lastTimeRef = useRef(null);
   const spawnTimerRef = useRef(0);
@@ -355,11 +357,15 @@ export default function ClassicRecycleGame({ onBack }) {
                     setScore(s => s + 10);
                     soundManager.playScore();
                     setItems(prev => prev.filter(i => i.id !== id));
+                    // Doğru ayrıştırmada maskot kutlaması
+                    celebrate('correctAnswer');
                     return 'success';
                   } else {
                     setLives(l => l - 1);
                     soundManager.playDamage();
                     setItems(prev => prev.filter(i => i.id !== id));
+                    // Yanlış kutuya atıldığında maskot tepkisi
+                    celebrate('wrongAnswer');
                     return 'fail';
                   }
                 }

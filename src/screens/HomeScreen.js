@@ -42,7 +42,7 @@ export default function HomeScreen({ onPlay }) {
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
   const { themes, activeTheme, setActiveTheme } = useThemeProgress();
   const [transitionTarget, setTransitionTarget] = useState(null);
-  const [activeTab, setActiveTab] = useState("GAMES");
+  const [activeTab, setActiveTab] = useState("GAMES"); // GAMES | THEMES | SETTINGS
   const panelAnim = useRef(new Animated.Value(1)).current;
   const [darkMode, setDarkMode] = useState(false);
 
@@ -364,6 +364,12 @@ export default function HomeScreen({ onPlay }) {
                 >
                   <Text style={styles.sideRailButtonText}>🧹 Temizleme</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.sideRailButton}
+                  onPress={() => animatePanelChange("SETTINGS")}
+                >
+                  <Text style={styles.sideRailButtonText}>⚙️ Ayarlar</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.mainColumn}>
@@ -469,6 +475,87 @@ export default function HomeScreen({ onPlay }) {
                   onPress={() => handleSelectTheme(theme.id)}
                 />
               ))}
+            </View>
+          </Animated.View>
+        )}
+
+        {activeTab === "SETTINGS" && (
+          <Animated.View
+            style={[
+              styles.panel,
+              {
+                opacity: panelAnim,
+                transform: [
+                  {
+                    translateY: panelAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.settingsHeaderRow}>
+              <Text style={styles.settingsTitle}>Ayarlar</Text>
+              <Text style={styles.settingsSubtitle}>
+                Ses, görünüm ve ebeveyn modu tercihlerini buradan yönetebilirsin.
+              </Text>
+            </View>
+
+            <View style={styles.cards}>
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => setSoundOn((v) => !v)}
+                activeOpacity={0.9}
+              >
+                <View style={styles.cardIconWrap}>
+                  <Text style={styles.cardIcon}>{soundOn ? '🔊' : '🔈'}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>Sesler</Text>
+                  <Text style={styles.cardDesc}>
+                    {soundOn ? 'Müzik ve efektler açık.' : 'Tüm oyun sesleri kapalı.'}
+                  </Text>
+                </View>
+                <Text style={styles.cardChevron}>{soundOn ? 'I' : 'O'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => setDarkMode((v) => !v)}
+                activeOpacity={0.9}
+              >
+                <View style={styles.cardIconWrap}>
+                  <Text style={styles.cardIcon}>{darkMode ? '🌙' : '☀️'}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>Görünüm</Text>
+                  <Text style={styles.cardDesc}>
+                    {darkMode
+                      ? 'Karanlık mod açık. Daha yumuşak, loş bir görünüm.'
+                      : 'Aydınlık mod açık. Canlı ve parlak bir görünüm.'}
+                  </Text>
+                </View>
+                <Text style={styles.cardChevron}>{darkMode ? '🌙' : '☀️'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => setShowParentMode(true)}
+                activeOpacity={0.9}
+              >
+                <View style={styles.cardIconWrap}>
+                  <Text style={styles.cardIcon}>🧩</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>Ebeveyn Modu</Text>
+                  <Text style={styles.cardDesc}>
+                    Oyun süresini, zorluk seviyesini ve çocuk güvenliğini ayarla.
+                  </Text>
+                </View>
+                <Text style={styles.cardChevron}>›</Text>
+              </TouchableOpacity>
             </View>
           </Animated.View>
         )}
@@ -750,6 +837,19 @@ const styles = StyleSheet.create({
   themeRowSubtitle: {
     fontSize: 12,
     color: THEME.wave,
+  },
+  settingsHeaderRow: {
+    marginBottom: 4,
+  },
+  settingsTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.deepSea,
+  },
+  settingsSubtitle: {
+    fontSize: 12,
+    color: THEME.wave,
+    marginTop: 2,
   },
   leftRail: {
     marginBottom: 12,

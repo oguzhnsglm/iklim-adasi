@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, TextInput, ScrollView } from 'react-native';
+import { useMascot } from '../context/MascotContext';
 
 const BINS = [
   { id: 'glass', icon: '🍾', label: 'CAM', color: '#4ade80' },
@@ -30,6 +31,8 @@ export default function MathGame({ onBack }) {
   const [correctCount, setCorrectCount] = useState(0); // Doğru cevap sayacı
   const [difficulty, setDifficulty] = useState(3); // Başlangıç işlem sayısı
   const [roundKey, setRoundKey] = useState(0); // Her tur için benzersiz key
+
+  const { celebrate } = useMascot();
 
   // Yeni tur başlat
   const startNewRound = () => {
@@ -101,6 +104,9 @@ export default function MathGame({ onBack }) {
       if (newCorrectCount % 3 === 0) {
         setDifficulty(d => d + 1);
       }
+
+      // Doğru cevap kutlaması
+      celebrate('correctAnswer');
       
       setTimeout(() => {
         // Sonraki kovaya geç
@@ -113,6 +119,8 @@ export default function MathGame({ onBack }) {
     } else {
       setLives(l => {
         const newLives = l - 1;
+        // Yanlış cevapta maskotun hafif olumsuz ama motive edici tepkisi
+        celebrate('wrongAnswer');
         if (newLives <= 0) {
           setTimeout(() => setPhase("ENDED"), 1500);
         } else {
@@ -124,6 +132,13 @@ export default function MathGame({ onBack }) {
       });
     }
   };
+
+  // Oyun bitince görev tamamlandı kutlaması
+  useEffect(() => {
+    if (phase === 'ENDED' && score > 0) {
+      celebrate('questCompleted');
+    }
+  }, [phase, score, celebrate]);
 
   const AnimatedItem = ({ operation, index, delay }) => {
     const animY = useRef(new Animated.Value(-100)).current;

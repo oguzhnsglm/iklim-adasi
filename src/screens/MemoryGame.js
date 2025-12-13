@@ -68,10 +68,11 @@ export default function MemoryGame({ onBack }) {
   const [phase, setPhase] = useState("TUTORIAL"); // TUTORIAL | RUNNING | ENDED
   const timerRef = useRef(null);
 
-  // Seviye 1: 6 kart (3x2 - 3 çift), sonrasında her seviye 2 kart daha ekle
+  // Seviye 1: 6 kart (3 çift, 1 satır = 3 kart)
+  // Her seviyede +3 çift (6 kart) eklenir → her seviye için 1 satır daha eklenmiş olur.
   const getTotalCards = (lvl) => {
-    if (lvl === 1) return 6; // 3 çift = 6 kart (3x2)
-    return Math.min(6 + (lvl - 1) * 2, ITEMS.length * 2); // Her seviye 2 kart artır
+    const total = 6 * lvl; // 3 kart x 2 (çift) x seviye
+    return Math.min(total, ITEMS.length * 2);
   };
 
   const totalCards = getTotalCards(level);
@@ -199,9 +200,19 @@ export default function MemoryGame({ onBack }) {
     return showPreview || flippedIndices.includes(index) || matchedPairs.includes(cards[index].id);
   };
 
-  // Daha küçük kart boyutları - ekrana sığması için
-  const gridSize = Math.ceil(Math.sqrt(pairsCount * 2));
-  const cardSize = Math.min((width - 80) / gridSize - 8, 70); // Maksimum 70px
+  // Her satırda tam 3 kart olacak şekilde, ekrana orantılı kart boyutu
+  const columns = 3;
+  const horizontalPadding = 40; // sol/sağ boşluk toplamı
+  const gridWidth = width - horizontalPadding;
+  const columnWidth = gridWidth / columns;
+
+  // Seviye arttıkça kartları kademeli küçült (ör: 110, 102, 94, ... en az 70)
+  const levelShrink = Math.max(0, level - 1);
+  const maxSizeByLevel = 110 - levelShrink * 8;
+
+  // Kart yüzü, sütun genişliğinden çok az küçük kare olsun (kartlar birbirine daha yakın)
+  const maxSizeByColumn = columnWidth - 4;
+  const cardSize = Math.max(70, Math.min(maxSizeByColumn, maxSizeByLevel));
 
   return (
     <View style={styles.container}>
@@ -303,6 +314,7 @@ export default function MemoryGame({ onBack }) {
             isFlipped={isCardFlipped(index)}
             onPress={() => handleCardPress(index)}
             size={cardSize}
+            columnWidth={columnWidth}
           />
         ))}
       </View>
@@ -310,14 +322,23 @@ export default function MemoryGame({ onBack }) {
   );
 }
 
-const Card = ({ card, isFlipped, onPress, size }) => {
+const Card = ({ card, isFlipped, onPress, size, columnWidth }) => {
   const flipAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.spring(flipAnim, {
       toValue: isFlipped ? 1 : 0,
+      friction: 10,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+
+    // Kart açıldığında hafif büyüme, kapanırken normale dönüş (iOS tarzı yumuşak animasyon)
+    Animated.spring(scaleAnim, {
+      toValue: isFlipped ? 1.04 : 1,
       friction: 8,
-      tension: 10,
+      tension: 30,
       useNativeDriver: true,
     }).start();
   }, [isFlipped]);
@@ -342,11 +363,29 @@ const Card = ({ card, isFlipped, onPress, size }) => {
     outputRange: [0, 0, 1],
   });
 
+  const handlePress = () => {
+    // Dokunmada küçük bir "tap" efekti
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.97,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: isFlipped ? 1.04 : 1,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    if (onPress) onPress();
+  };
+
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={onPress}
-      style={[styles.cardContainer, { width: size, height: size }]}
+      activeOpacity={0.9}
+      onPress={handlePress}
+      style={[styles.cardContainer, { width: columnWidth, height: size }]}
     >
       {/* Card Back (Kapalı Yüz) */}
       <Animated.View
@@ -357,7 +396,10 @@ const Card = ({ card, isFlipped, onPress, size }) => {
             width: size,
             height: size,
             opacity: frontOpacity,
-            transform: [{ rotateY: frontInterpolate }],
+            transform: [
+              { scale: scaleAnim },
+              { rotateY: frontInterpolate },
+            ],
           },
         ]}
       >
@@ -373,7 +415,10 @@ const Card = ({ card, isFlipped, onPress, size }) => {
             width: size,
             height: size,
             opacity: backOpacity,
-            transform: [{ rotateY: backInterpolate }],
+            transform: [
+              { scale: scaleAnim },
+              { rotateY: backInterpolate },
+            ],
           },
         ]}
       >
@@ -387,7 +432,7 @@ const Card = ({ card, isFlipped, onPress, size }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#87CEEB', // Gökyüzü mavisi
+    backgroundColor: '#f0f4f8', // Soft pastel arka plan (iOS tarzı)
     alignItems: 'center',
   },
   header: {
@@ -395,23 +440,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    padding: 15,
-    backgroundColor: 'rgba(135, 206, 250, 0.9)', // Açık mavi
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255,255,255,0.85)', // Hafif şeffaf beyaz (glass effect hissi)
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(148,163,184,0.4)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
   backBtn: {
-    padding: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(15,23,42,0.06)',
+    borderRadius: 999,
   },
   backText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '700',
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '800',
+    color: '#0f172a',
   },
   placeholder: {
     width: 60,
@@ -424,71 +477,93 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statBox: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
     alignItems: 'center',
     minWidth: 70,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(148,163,184,0.4)',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
   statLabel: {
-    fontSize: 10,
-    color: '#1E88E5', // Koyu mavi
+    fontSize: 11,
+    color: '#64748b',
     marginBottom: 2,
+    fontWeight: '600',
   },
   statValue: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0D47A1', // Daha koyu mavi
+    fontWeight: '800',
+    color: '#0f172a',
   },
   previewMessage: {
-    backgroundColor: 'rgba(255, 235, 59, 0.95)', // Sarı
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 20,
-    marginBottom: 20,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 26,
+    paddingVertical: 10,
+    borderRadius: 999,
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
   previewText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1565C0', // Mavi
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 6,
-    padding: 15,
+    gap: 0,
+    paddingVertical: 8,
   },
   cardContainer: {
-    margin: 3,
+    margin: 0,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardFace: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: 24, // Daha yumuşak, iOS tarzı yuvarlatılmış köşeler
     backfaceVisibility: 'hidden',
   },
   cardBack: {
-    backgroundColor: '#64B5F6', // Açık gökyüzü mavisi
-    borderWidth: 3,
-    borderColor: '#42A5F5', // Orta mavi
+    backgroundColor: 'rgba(148,163,184,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.4)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
   },
   cardFront: {
-    backgroundColor: '#fff',
-    borderWidth: 3,
-    borderColor: '#2196F3', // Mavi
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.4)',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
   },
   cardBackIcon: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   cardIcon: {
     marginBottom: 5,
   },
   cardLabel: {
-    fontWeight: 'bold',
-    color: '#1a4d2e',
+    fontWeight: '600',
+    color: '#0f172a',
     textAlign: 'center',
   },
   restartBtn: {

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions, Animated } from "react-native";
 import KeyboardScrollView from '../components/KeyboardScrollView';
 import { NatureBackground } from './GameComponents';
 import MemoryGame from './MemoryGame';
@@ -191,10 +191,16 @@ function ModeSelectionScreen({
   onToggleDark,
 }) {
   const { themes, activeTheme, setActiveTheme } = useThemeProgress();
+  const { width: screenWidth } = useWindowDimensions();
+  const isMobile = screenWidth < 768;
+  // Mobilde de ikinci görseldeki gibi dar bir menü için sabit genişlik
+  const sidebarWidth = 70;
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
   const [totalScore, setTotalScore] = useState(0);
   const [activeSide, setActiveSide] = useState('GAMES');
   const [lives, setLives] = useState(3);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const sidebarAnim = useRef(new Animated.Value(0)).current;
 
   const dailyFacts = useMemo(() => {
     const perTheme = {
@@ -236,6 +242,30 @@ function ModeSelectionScreen({
   const currentBadge = currentTasks[currentLevelIndex] || currentTasks[0];
   const currentTaskTitle = currentBadge ? currentBadge.title : '';
 
+  useEffect(() => {
+    setIsSidebarOpen(false);
+    sidebarAnim.setValue(0);
+  }, [isMobile, sidebarAnim]);
+
+  const toggleSidebar = () => {
+    const nextOpen = !isSidebarOpen;
+    setIsSidebarOpen(nextOpen);
+    Animated.timing(sidebarAnim, {
+      toValue: nextOpen ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  };
+  const closeSidebar = () => {
+    if (!isSidebarOpen) return;
+    setIsSidebarOpen(false);
+    Animated.timing(sidebarAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const handleSelectTheme = (themeId) => {
     const theme = themes.find((t) => t.id === themeId);
     if (!theme || !theme.unlocked) return;
@@ -264,50 +294,97 @@ function ModeSelectionScreen({
     return () => clearInterval(id);
   }, [currentHour]);
 
+  const renderSidebarContent = () => (
+    <>
+      <View style={styles.sideThemeCard}>
+        <Text style={styles.sideThemeIcon}>{activeTheme.icon}</Text>
+        <Text style={styles.sideThemeName} numberOfLines={1}>{activeTheme.name}</Text>
+        <Text style={styles.sideThemeScore}>⭐ {totalScore}</Text>
+      </View>
+      {SIDE_ITEMS.map((item) => {
+        const selected = activeSide === item.id;
+        const handlePress = () => {
+          setActiveSide(item.id);
+          if (isMobile) closeSidebar();
+        };
+
+        return (
+          <TouchableOpacity
+            key={item.id}
+            style={[styles.sideItem, selected && styles.sideItemActive]}
+            onPress={handlePress}
+          >
+            <View style={styles.sideItemInner}>
+              <Text style={styles.sideIcon}>{item.icon}</Text>
+              <Text style={styles.sideLabel} numberOfLines={1}>{item.label}</Text>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </>
+  );
+
+  const sidebarTranslate = sidebarAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-sidebarWidth, 0],
+  });
+
   return (
     <View style={[styles.screenRoot, darkMode && styles.screenRootDark]}>
-      <View
-        style={[
-          styles.sideBar,
-          {
-            backgroundColor:
-              activeTheme.palette?.background || 'rgba(255,255,255,0.9)',
-          },
-        ]}
-      >
-        <View style={styles.sideThemeCard}>
-          <Text style={styles.sideThemeIcon}>{activeTheme.icon}</Text>
-          <Text style={styles.sideThemeName} numberOfLines={1}>{activeTheme.name}</Text>
-          <Text style={styles.sideThemeScore}>⭐ {totalScore}</Text>
+      {/* Geniş ekranlarda: butonla açılıp kapanan sabit sidebar */}
+      {!isMobile && isSidebarOpen && (
+        <View
+          style={[
+            styles.sideBar,
+            {
+              width: sidebarWidth,
+              backgroundColor:
+                activeTheme.palette?.background || 'rgba(255,255,255,0.9)',
+            },
+          ]}
+        >
+          {renderSidebarContent()}
         </View>
-        {SIDE_ITEMS.map((item) => {
-          const selected = activeSide === item.id;
-          const handlePress = () => {
-            setActiveSide(item.id);
-          };
+      )}
 
-          return (
+      {/* Mobilde açılıp kapanan sidebar ve overlay */}
+      {isMobile && (
+        <>
+          {isSidebarOpen && (
             <TouchableOpacity
-              key={item.id}
-              style={[styles.sideItem, selected && styles.sideItemActive]}
-              onPress={handlePress}
-            >
-              <View style={styles.sideItemInner}>
-                <Text style={styles.sideIcon}>{item.icon}</Text>
-                <Text style={styles.sideLabel} numberOfLines={1}>{item.label}</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              activeOpacity={1}
+              onPress={closeSidebar}
+              style={styles.sidebarOverlay}
+            />
+          )}
+          <Animated.View
+            style={[
+              styles.sideBar,
+              styles.sideBarFloating,
+              {
+                width: sidebarWidth,
+                backgroundColor:
+                  activeTheme.palette?.background || 'rgba(255,255,255,0.95)',
+                transform: [{ translateX: sidebarTranslate }],
+              },
+            ]}
+          >
+            {renderSidebarContent()}
+          </Animated.View>
+        </>
+      )}
 
       <KeyboardScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.mainContent}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!isSidebarOpen}
       >
         <View style={styles.headerRow}>
-              <Text style={styles.logoText}>DOĞAYI KORU</Text>
+          <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+            <Text style={styles.menuIcon}>☰</Text>
+          </TouchableOpacity>
+          <Text style={styles.logoText}>DOĞAYI KORU</Text>
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={onShowProfile}>
               <Text style={styles.headerIcon}>👤</Text>
@@ -558,6 +635,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     justifyContent: 'space-between',
   },
+  sideBarFloating: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 12,
+  },
+  sidebarOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    zIndex: 10,
+  },
   sideThemeCard: {
     width: 50,
     borderRadius: 18,
@@ -616,6 +714,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  menuButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15,23,42,0.35)',
+    marginRight: 8,
+  },
+  menuIcon: {
+    fontSize: 18,
+    color: '#e5e7eb',
   },
   logoText: {
     fontSize: 22,

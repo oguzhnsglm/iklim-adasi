@@ -321,10 +321,11 @@ export default function SlingshotGame({ onBack }) {
   // Zemin Yüksekliğine göre ayarlar (Ekranın %25'i zemin)
   const GROUND_LEVEL = gameH * 0.25;
   
+  // Sapan ayarları: basit ve tutarlı fizik
   const SLING_CONFIG = {
-    maxDrag: 150,
-    powerScale: 12,
-    gravity: 1200,
+    maxDrag: 150,           // En fazla geriye çekme mesafesi
+    powerScale: 10,         // Çekme mesafesini hız kuvvetine çevirme katsayısı
+    gravity: 1100,          // Yer çekimi
     anchorX: 120,
     anchorY: gameH - GROUND_LEVEL - 80 // Sapanı zeminin biraz üstüne koy
   };
@@ -367,34 +368,46 @@ export default function SlingshotGame({ onBack }) {
         const { phase, projectile } = stateRef.current;
         return phase === "RUNNING" && !projectile;
       },
-      onPanResponderGrant: (evt) => {
+      onMoveShouldSetPanResponder: () => {
+        const { phase, projectile } = stateRef.current;
+        return phase === "RUNNING" && !projectile;
+      },
+      onPanResponderGrant: () => {
+        // Başlangıçta topu sapan noktasına yerleştir
         setDragStart({ x: SLING_CONFIG.anchorX, y: SLING_CONFIG.anchorY });
         setDragCurrent({ x: SLING_CONFIG.anchorX, y: SLING_CONFIG.anchorY });
       },
       onPanResponderMove: (evt, gestureState) => {
+        // Jestin başlangıcına göre göreli hareketi kullan (cihaz yönünden bağımsız)
         let { dx, dy } = gestureState;
-        
+
         const dist = Math.hypot(dx, dy);
         if (dist > SLING_CONFIG.maxDrag) {
           const ratio = SLING_CONFIG.maxDrag / dist;
           dx *= ratio; dy *= ratio;
         }
-        setDragCurrent({ x: SLING_CONFIG.anchorX + dx, y: SLING_CONFIG.anchorY + dy });
+
+        setDragCurrent({
+          x: SLING_CONFIG.anchorX + dx,
+          y: SLING_CONFIG.anchorY + dy,
+        });
       },
       onPanResponderRelease: (evt, gestureState) => {
         const { currentType } = stateRef.current;
         let { dx, dy } = gestureState;
         
         const dist = Math.hypot(dx, dy);
-        if (dist < 20) {
+        // Çok küçük sürüklemelerde atış yapma
+        if (dist < 10) {
           setDragStart(null); setDragCurrent(null);
           return;
         }
 
         if (dist > SLING_CONFIG.maxDrag) {
-          const r = SLING_CONFIG.maxDrag/dist; dx*=r; dy*=r;
+          const r = SLING_CONFIG.maxDrag / dist; dx *= r; dy *= r;
         }
 
+        // Çektiğin yönün tersi yöne fırlat
         const vx = -dx * SLING_CONFIG.powerScale;
         const vy = -dy * SLING_CONFIG.powerScale;
 
@@ -516,24 +529,25 @@ export default function SlingshotGame({ onBack }) {
     
     const dx = dragCurrent.x - SLING_CONFIG.anchorX;
     const dy = dragCurrent.y - SLING_CONFIG.anchorY;
-    
+
     const aimX = -dx;
     const aimY = -dy;
-    
+
     const dist = Math.hypot(aimX, aimY);
     const powerRatio = Math.min(dist / SLING_CONFIG.maxDrag, 1.0);
-    
-    const hue = 120 - (powerRatio * 120);
+
+    const hue = 120 - powerRatio * 120;
     const color = `hsl(${hue}, 100%, 50%)`; // Neon renkler
-    
-    const angle = Math.atan2(aimY, aimX) * 180 / Math.PI;
+
+    const vx = aimX * SLING_CONFIG.powerScale;
+    const vy = aimY * SLING_CONFIG.powerScale;
+    const angleRad = Math.atan2(vy, vx);
+    const angle = (angleRad * 180) / Math.PI;
     const arrowLen = 40 + (powerRatio * 100);
 
     const dots = [];
-    const vx = aimX * SLING_CONFIG.powerScale;
-    const vy = aimY * SLING_CONFIG.powerScale;
     
-    for(let i=1; i<=8; i++) {
+    for (let i = 1; i <= 8; i++) {
       const t = i * 0.15;
       const tx = SLING_CONFIG.anchorX + vx * t;
       const ty = SLING_CONFIG.anchorY + vy * t + 0.5 * SLING_CONFIG.gravity * t * t;

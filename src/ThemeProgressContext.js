@@ -5,9 +5,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const THEMES = [
   {
     id: "rainforest",
-    name: "Yağmur Ormanı Teması",
-    icon: "🌳",
-    description: "Sıcak ve nemli iklimde, gökyüzünü örten yoğun ağaçlar ve rengarenk hayvanlar.",
+    name: "Yağmur Ormanı",
+    icon: "🌿",
+    description:
+      "Sıcak ve nemli iklimde, gökyüzünü örten yoğun ağaçlar ve rengarenk hayvanlar.",
     totalZones: 8,
     pointsPerZone: 500,
     maxLevels: 15,
@@ -15,13 +16,20 @@ const THEMES = [
       background: "#E8F5E9",
       primary: "#166534",
       accent: "#4ade80",
+      foam: "#C8E6C9",
+      wave: "#66BB6A",
+      tide: "#81C784",
+      sand: "#A5D6A7",
+      textDark: "#1B5E20",
+      textLight: "#F1F8E9",
     },
   },
   {
     id: "pacific",
-    name: "Pasifik Okyanusu Teması",
+    name: "Pasifik Okyanusu",
     icon: "🌊",
-    description: "Balıklarla, mercan resifleriyle ve derin mavi sularla dolu geniş okyanus dünyası.",
+    description:
+      "Balıklar, mercan resifleri ve derin mavi sularla dolu geniş bir okyanus dünyası.",
     totalZones: 8,
     pointsPerZone: 600,
     unlockAfter: "rainforest",
@@ -29,12 +37,18 @@ const THEMES = [
     palette: {
       background: "#E0F7FA",
       primary: "#0369A1",
-      accent: "#38bdf8",
+      accent: "#0ea5e9",
+      foam: "#d1f4ff",
+      wave: "#0ea5e9",
+      tide: "#38bdf8",
+      sand: "#bde8ff",
+      textDark: "#023047",
+      textLight: "#f8fafc",
     },
   },
   {
     id: "sahara",
-    name: "Sahra Çölü Teması",
+    name: "Sahra Çölü",
     icon: "🏜️",
     description: "Sıcak kum tepeleri, güneşli günler ve dayanıklı bitkiler.",
     totalZones: 8,
@@ -45,12 +59,18 @@ const THEMES = [
       background: "#FFF7ED",
       primary: "#C2410C",
       accent: "#FDBA74",
+      foam: "#FFE8CC",
+      wave: "#f97316",
+      tide: "#fbbf24",
+      sand: "#fed7aa",
+      textDark: "#7C2D12",
+      textLight: "#FFFBEB",
     },
   },
   {
     id: "antarctica",
-    name: "Antarktika Buzul Teması",
-    icon: "❄️",
+    name: "Antarktika Buzulu",
+    icon: "🧊",
     description: "Buzullarla kaplı kıta, kutup hayvanları ve soğuk rüzgarlar.",
     totalZones: 8,
     pointsPerZone: 650,
@@ -60,6 +80,12 @@ const THEMES = [
       background: "#E3F2FD",
       primary: "#0ea5e9",
       accent: "#bae6fd",
+      foam: "#e0f2fe",
+      wave: "#7dd3fc",
+      tide: "#bae6fd",
+      sand: "#dbeafe",
+      textDark: "#0b4667",
+      textLight: "#f8fafc",
     },
   },
 ];
@@ -85,8 +111,8 @@ export const ThemeProgressProvider = ({ children }) => {
   }, {});
 
   const [state, setState] = useState({
-     activeThemeId: "rainforest",
-     unlockedThemeIds: ["rainforest"],
+    activeThemeId: "rainforest",
+    unlockedThemeIds: ["rainforest", "pacific", "sahara", "antarctica"],
     progressMap: emptyProgress,
     levelState: emptyLevels,
     totalScore: 0,
@@ -127,10 +153,12 @@ export const ThemeProgressProvider = ({ children }) => {
           }
         }
 
-        // Orman her zaman açık olsun; diğer temalar seviye durumuna göre açılır
-          // Yağmur ormanı her zaman açık olsun; diğer temalar seviye durumuna göre açılır
+        // Yağmur ormanı ve Pasifik her zaman açık; diğer temalar seviye durumuna göre açılır
         const unlocked = new Set(nextState.unlockedThemeIds || []);
-          unlocked.add("rainforest");
+        unlocked.add("rainforest");
+        unlocked.add("pacific");
+        unlocked.add("sahara");
+        unlocked.add("antarctica");
 
         THEMES.forEach((theme) => {
           if (!theme.unlockAfter) return;
@@ -143,9 +171,7 @@ export const ThemeProgressProvider = ({ children }) => {
           }
         });
 
-        nextState.unlockedThemeIds = THEMES.map((t) => t.id).filter((id) =>
-          unlocked.has(id)
-        );
+        nextState.unlockedThemeIds = THEMES.map((t) => t.id).filter((id) => unlocked.has(id));
 
         setState(nextState);
       } catch (e) {
@@ -211,7 +237,6 @@ export const ThemeProgressProvider = ({ children }) => {
         totalScore: (prev.totalScore || 0) + delta,
       };
 
-      // AsyncStorage kaydını tetikle (fire-and-forget)
       persistState(next);
       return next;
     });
@@ -240,9 +265,11 @@ export const ThemeProgressProvider = ({ children }) => {
         [themeId]: updatedThemeLevel,
       };
 
-      // Seviye tamamlandıysa bir sonraki temayı aç
       const unlocked = new Set(prev.unlockedThemeIds || []);
       unlocked.add("rainforest");
+      unlocked.add("pacific");
+      unlocked.add("sahara");
+      unlocked.add("antarctica");
 
       THEMES.forEach((theme) => {
         if (!theme.unlockAfter) return;

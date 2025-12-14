@@ -435,9 +435,84 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
       // ============= MATH UTILITIES =============
       const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
       const lerp = (start, end, t) => start + (end - start) * t;
+      const smoothstep = (t) => {
+        const x = clamp(t, 0, 1);
+        return x * x * (3 - 2 * x);
+      };
       const randomRange = (min, max) => Math.random() * (max - min) + min;
+      const hexToRgb = (input) => {
+        if (typeof input !== 'string') return { r: 0, g: 0, b: 0 };
+        if (input.startsWith('rgb')) {
+          const parts = input.match(/[\d.]+/g) || [0, 0, 0];
+          const [r, g, b] = parts.map(Number);
+          return { r, g, b };
+        }
+        const hex = input.replace('#', '');
+        const expanded = hex.length === 3 ? hex.split('').map(ch => ch + ch).join('') : hex;
+        const bigint = parseInt(expanded, 16);
+        if (Number.isNaN(bigint)) return { r: 0, g: 0, b: 0 };
+        return {
+          r: (bigint >> 16) & 255,
+          g: (bigint >> 8) & 255,
+          b: bigint & 255
+        };
+      };
+      const lerpColor = (from, to, t) => {
+        const tt = Number.isFinite(t) ? clamp(t, 0, 1) : 0;
+        const a = hexToRgb(from);
+        const b = hexToRgb(to);
+        const components = [a.r, a.g, a.b, b.r, b.g, b.b];
+        if (components.some((v) => Number.isNaN(v))) {
+          return typeof to === 'string' ? to : from;
+        }
+        const mix = (c1, c2) => Math.round(lerp(c1, c2, tt));
+        const r = mix(a.r, b.r);
+        const g = mix(a.g, b.g);
+        const bValue = mix(a.b, b.b);
+        return \`rgb(\${r}, \${g}, \${bValue})\`;
+      };
       let uidCounter = 0;
       const uid = (prefix = 'id') => \`\${prefix}-\${++uidCounter}\`;
+
+      // Visual tuning knobs
+      const LIGHTING_CONFIG = {
+        startDarkness: 0.62,
+        endDarkness: 0.05,
+        progressForFullBrightness: 20,
+        sky: {
+          classic: {
+            dark: { top: '#0c1623', bottom: '#1a2635' },
+            bright: { top: '#87ceeb', bottom: '#e0f7ff' }
+          },
+          dark: {
+            dark: { top: '#050b16', bottom: '#0f1725' },
+            bright: { top: '#0b1320', bottom: '#1f2a38' }
+          },
+          neon: {
+            dark: { top: '#02000a', bottom: '#1c003a' },
+            bright: { top: '#03001e', bottom: '#7303c0' }
+          }
+        }
+      };
+
+      const BIRD_COLOR_CYCLE = {
+        interval: 10,
+        transitionSpan: 3,
+        sequence: [
+          { primary: '#4da4ff', secondary: '#2d6bff' }, // mavi
+          { primary: '#9c6bff', secondary: '#6b3bff' }, // mor
+          { primary: '#ff5c5c', secondary: '#ff2f2f' }  // kŽñrmŽñzŽñ
+        ]
+      };
+
+      const WING_CONFIG = {
+        size: 18,
+        color: '#f5f5f5',
+        flapSpeed: 10,
+        flapAmp: 0.7,
+        boostMs: 200,
+        boostMult: 1.8
+      };
 
       // ============= STORAGE =============
       const SETTINGS_KEY = 'flappy:settings';
@@ -809,6 +884,8 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
           this.position = { x, y };
           this.velocity = 0;
           this.rotation = 0;
+          this.wingTime = 0;
+          this.wingBoost = 0;
           this.mask = this.createMask();
           this.applyConfig(config);
         }
@@ -818,6 +895,8 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
           this.position.y = y;
           this.velocity = 0;
           this.rotation = 0;
+          this.wingTime = 0;
+          this.wingBoost = 0;
           this.applyConfig(config);
         }
 
@@ -830,19 +909,22 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
           this.position.y += this.velocity * delta;
           const tilt = clamp(this.velocity / 600, -0.45, 1.2);
           this.rotation = clamp(tilt, -0.6, 1.2);
+          this.wingTime += delta;
+          this.wingBoost = Math.max(0, this.wingBoost - delta);
         }
 
-        draw(ctx, theme, debug) {
+        draw(ctx, theme, debug, score = 0) {
           ctx.save();
           ctx.translate(this.position.x, this.position.y);
           ctx.rotate(this.rotation);
-          const palette = this.getBirdPalette(theme);
+          const palette = this.getBirdPalette(theme, score);
           const gradient = ctx.createLinearGradient(-this.width / 2, 0, this.width / 2, this.height);
           gradient.addColorStop(0, palette.primary);
           gradient.addColorStop(1, palette.secondary);
           ctx.fillStyle = gradient;
           this.roundedRect(ctx, -this.width / 2, -this.height / 2, this.width, this.height, 14);
           ctx.fill();
+          this.drawWing(ctx);
           // Eye
           ctx.fillStyle = palette.eyeWhite;
           ctx.beginPath();
@@ -851,14 +933,6 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
           ctx.fillStyle = palette.eyeDark;
           ctx.beginPath();
           ctx.arc(this.width * 0.18, -this.height * 0.1, this.height * 0.1, 0, Math.PI * 2);
-          ctx.fill();
-          // Beak
-          ctx.fillStyle = palette.beak;
-          ctx.beginPath();
-          ctx.moveTo(this.width * 0.25, 0);
-          ctx.lineTo(this.width * 0.5, this.height * 0.08);
-          ctx.lineTo(this.width * 0.25, this.height * 0.16);
-          ctx.closePath();
           ctx.fill();
           ctx.restore();
           if (debug) {
@@ -872,6 +946,7 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
 
         flap() {
           this.velocity = this.jumpImpulse;
+          this.wingBoost = Math.max(this.wingBoost, WING_CONFIG.boostMs / 1000);
         }
 
         getY() {
@@ -932,33 +1007,76 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
           ctx.closePath();
         }
 
-        getBirdPalette(theme) {
-          switch (theme) {
-            case 'neon':
-              return {
-                primary: '#ff68ff',
-                secondary: '#4d8dff',
-                eyeWhite: '#f8faff',
-                eyeDark: '#20062e',
-                beak: '#ffd166'
-              };
-            case 'dark':
-              return {
-                primary: '#ffa552',
-                secondary: '#ff4f79',
-                eyeWhite: '#fdf9f3',
-                eyeDark: '#1b1b1f',
-                beak: '#ffc857'
-              };
-            default:
-              return {
-                primary: '#ffe066',
-                secondary: '#ff7b54',
-                eyeWhite: '#fefefe',
-                eyeDark: '#1f3b57',
-                beak: '#ff9561'
-              };
-          }
+        getBirdPalette(theme, score = 0) {
+          const base = (() => {
+            switch (theme) {
+              case 'neon':
+                return {
+                  primary: '#ff68ff',
+                  secondary: '#4d8dff',
+                  eyeWhite: '#f8faff',
+                  eyeDark: '#20062e',
+                  beak: '#ffd166'
+                };
+              case 'dark':
+                return {
+                  primary: '#ffa552',
+                  secondary: '#ff4f79',
+                  eyeWhite: '#fdf9f3',
+                  eyeDark: '#1b1b1f',
+                  beak: '#ffc857'
+                };
+              default:
+                return {
+                  primary: '#ffe066',
+                  secondary: '#ff7b54',
+                  eyeWhite: '#fefefe',
+                  eyeDark: '#1f3b57',
+                  beak: '#ff9561'
+                };
+            }
+          })();
+
+          const { interval, transitionSpan, sequence } = BIRD_COLOR_CYCLE;
+          if (!interval || !sequence.length) return base;
+
+          const cycleIndex = Math.floor(score / interval);
+          const within = score % interval;
+          const target =
+            cycleIndex > 0 ? sequence[(cycleIndex - 1) % sequence.length] : null;
+          if (!target) return base;
+
+          const previous =
+            cycleIndex === 1
+              ? base
+              : sequence[(cycleIndex - 2 + sequence.length) % sequence.length];
+
+          const t = smoothstep(clamp(within / transitionSpan, 0, 1));
+          const primary = lerpColor(previous.primary, target.primary, t);
+          const secondary = lerpColor(previous.secondary, target.secondary, t);
+
+          return { ...base, primary, secondary };
+        }
+
+        drawWing(ctx) {
+          const speed = WING_CONFIG.flapSpeed * (this.wingBoost > 0 ? WING_CONFIG.boostMult : 1);
+          const amp = WING_CONFIG.flapAmp * (this.wingBoost > 0 ? WING_CONFIG.boostMult : 1);
+          const wingAngle = -0.2 + Math.sin(this.wingTime * speed) * amp;
+          const pivotX = -this.width * 0.18;
+          const pivotY = this.height * 0.02;
+          const size = WING_CONFIG.size;
+          ctx.save();
+          ctx.translate(pivotX, pivotY);
+          ctx.rotate(wingAngle);
+          ctx.fillStyle = WING_CONFIG.color;
+          ctx.globalAlpha = 0.9;
+          ctx.beginPath();
+          ctx.moveTo(-size * 0.2, -size * 0.1);
+          ctx.quadraticCurveTo(size * 0.6, -size * 0.8, size * 1.0, 0);
+          ctx.quadraticCurveTo(size * 0.6, size * 0.8, -size * 0.2, size * 0.1);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
         }
       }
 
@@ -1021,7 +1139,7 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
           return scoreDelta;
         }
 
-        draw(ctx, theme, debug) {
+        draw(ctx, theme, debug, brightness = 1) {
           this.pipes.forEach(pipe => {
             this.drawPipe(ctx, pipe, theme);
             if (debug) {
@@ -1224,16 +1342,16 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
           });
         }
 
-        draw(ctx, theme) {
+        draw(ctx, theme, brightness = 1) {
           const gradient = ctx.createLinearGradient(0, 0, 0, this.sceneHeight);
-          const palette = this.getBackgroundPalette(theme);
+          const palette = this.getBackgroundPalette(theme, brightness);
           gradient.addColorStop(0, palette.top);
           gradient.addColorStop(1, palette.bottom);
           ctx.fillStyle = gradient;
           ctx.fillRect(0, 0, this.sceneWidth, this.sceneHeight);
           this.layers.forEach(layer => {
             ctx.save();
-            ctx.globalAlpha = layer.alpha;
+            ctx.globalAlpha = layer.alpha * lerp(0.5, 1, brightness);
             ctx.fillStyle = layer.color;
             const count = Math.floor(this.sceneWidth / 80);
             for (let i = -1; i < count + 1; i++) {
@@ -1247,15 +1365,12 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
           });
         }
 
-        getBackgroundPalette(theme) {
-          switch (theme) {
-            case 'neon':
-              return { top: '#03001e', bottom: '#7303c0' };
-            case 'dark':
-              return { top: '#0b1320', bottom: '#1f2a38' };
-            default:
-              return { top: '#87ceeb', bottom: '#e0f7ff' };
-          }
+        getBackgroundPalette(theme, brightness) {
+          const palette = LIGHTING_CONFIG.sky[theme] || LIGHTING_CONFIG.sky.classic;
+          return {
+            top: lerpColor(palette.dark.top, palette.bright.top, brightness),
+            bottom: lerpColor(palette.dark.bottom, palette.bright.bottom, brightness)
+          };
         }
       }
 
@@ -1487,7 +1602,7 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
         canvas.height = CANVAS_HEIGHT;
         setTheme(settings.theme);
         updateScoreboard(0, scoreManager.getHighScore());
-        background.draw(context, settings.theme);
+        background.draw(context, settings.theme, getEnvironmentBrightness());
         ground.reset(settings.pipeSpeed);
         pipes.reset(settings.pipeSpeed, settings.gapSize);
         loop.start();
@@ -1588,6 +1703,20 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
         debugOverlay.setVisible(enabled);
       }
 
+      function getEnvironmentBrightness() {
+        const progress = scoreManager.getScore() || 0;
+        const normalized = clamp(progress / LIGHTING_CONFIG.progressForFullBrightness, 0, 1);
+        return smoothstep(normalized);
+      }
+
+      function applyDarknessOverlay(ctx, brightness, height) {
+        const darkness = lerp(LIGHTING_CONFIG.startDarkness, LIGHTING_CONFIG.endDarkness, brightness);
+        ctx.save();
+        ctx.fillStyle = \`rgba(0, 0, 0, \${darkness})\`;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, height);
+        ctx.restore();
+      }
+
       function handleUpdate(delta) {
         idleTime += delta;
         background.update(delta * 0.5);
@@ -1636,10 +1765,14 @@ const FlyBirdGameHtml = `<!DOCTYPE html>
       }
 
       function render() {
+        const brightness = getEnvironmentBrightness();
+        const score = scoreManager.getScore();
+        const skyHeight = ground.getBounds().y;
         context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        background.draw(context, settings.theme);
-        pipes.draw(context, settings.theme, settings.debug);
-        bird.draw(context, settings.theme, settings.debug);
+        background.draw(context, settings.theme, brightness);
+        applyDarknessOverlay(context, brightness, skyHeight);
+        pipes.draw(context, settings.theme, settings.debug, brightness);
+        bird.draw(context, settings.theme, settings.debug, score);
         ground.draw(context, settings.theme);
       }
 

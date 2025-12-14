@@ -26,21 +26,49 @@ export const TRASH_CONFIG = {
   organic: { id: 'organic', icon: '🍂', label: 'ORGANİK', color: COLORS.organic, bgColor: '#FED7AA' }
 };
 
-// Arka Plan Efektleri (Orman & Hayvanlar)
-export const NatureBackground = () => {
+// Arka Plan Efektleri (Orman & Okyanus)
+export const NatureBackground = ({
+  themeId = "rainforest",
+  palette,
+  intensity = 1,
+  baseColor,
+  midColor,
+}) => {
   const { width, height } = useWindowDimensions();
-  
-  const elements = React.useRef([...Array(15)].map(() => ({
-    anim: new Animated.Value(0),
-    left: Math.random() * width,
-    size: Math.random() * 20 + 10,
-    speed: Math.random() * 8000 + 6000,
-    delay: Math.random() * 5000,
-    isAnimal: Math.random() > 0.7
-  }))).current;
+
+  const isPacific = themeId === "pacific";
+  const themeColors = isPacific
+    ? { deep: "#012a4a", mid: "#014f86", beam: "rgba(255,255,255,0.08)" }
+    : {
+        deep: COLORS.bgDeep,
+        mid: COLORS.bgMid,
+        beam: "rgba(255,255,255,0.08)",
+      };
+  const deep = baseColor || themeColors.deep;
+  const mid = midColor || themeColors.mid;
+  const beamColor = themeColors.beam;
+
+  const floatIcons = isPacific
+    ? ["?Y??", "?Y?Y", "?Y??", "?Y??", "?Y?t", "?Y??", "?Y??", "?Y?s", "???", "?YOS"]
+    : ["?Y?S", "?Y?O", "?Y?????", "?YO?", "?Y?f", "?Y??"];
+
+  const groundIcons = isPacific
+    ? ["?Y?Y", "?Y?s", "?Y??", "?Y??", "?Y??", "?Y?t", "???", "?YOS"]
+    : ["?YO?", "?Y?O", "?YO?", "?Y?S", "?YO?", "?Y?????", "?YO?"];
+
+  const elements = React.useRef(
+    [...Array(Math.max(10, Math.round(15 * intensity)))].map(() => ({
+      anim: new Animated.Value(0),
+      left: Math.random() * width,
+      size: Math.random() * 18 + 12,
+      speed: Math.random() * 8000 + 5000,
+      delay: Math.random() * 4000,
+      icon: floatIcons[Math.floor(Math.random() * floatIcons.length)],
+    }))
+  ).current;
 
   useEffect(() => {
-    elements.forEach(e => {
+    elements.forEach((e) => {
       Animated.loop(
         Animated.sequence([
           Animated.delay(e.delay),
@@ -48,15 +76,18 @@ export const NatureBackground = () => {
             toValue: 1,
             duration: e.speed,
             easing: Easing.linear,
-            useNativeDriver: true
-          })
+            useNativeDriver: true,
+          }),
         ])
       ).start();
     });
-  }, []);
+  }, [elements]);
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.bgDeep, overflow: 'hidden' }]}>
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { backgroundColor: deep, overflow: 'hidden' }]}
+    >
       <View style={{
         position: 'absolute',
         top: -height * 0.2,
@@ -64,8 +95,8 @@ export const NatureBackground = () => {
         width: width * 1.4,
         height: width * 1.4,
         borderRadius: width,
-        backgroundColor: COLORS.bgMid,
-        opacity: 0.5,
+        backgroundColor: mid,
+        opacity: 0.45,
         transform: [{ scaleX: 1.5 }]
       }} />
 
@@ -75,7 +106,7 @@ export const NatureBackground = () => {
         left: width * 0.2,
         width: 60,
         height: height * 1.5,
-        backgroundColor: 'rgba(255,255,255,0.08)',
+        backgroundColor: beamColor,
         transform: [{ rotate: '25deg' }]
       }} />
       <View style={{
@@ -84,7 +115,7 @@ export const NatureBackground = () => {
         left: width * 0.5,
         width: 80,
         height: height * 1.5,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: beamColor,
         transform: [{ rotate: '20deg' }]
       }} />
 
@@ -109,7 +140,7 @@ export const NatureBackground = () => {
           }}
         >
           <Text style={{ fontSize: e.size }}>
-            {e.isAnimal ? (Math.random() > 0.5 ? '🦋' : '🐦') : '🍃'}
+            {e.icon}
           </Text>
         </Animated.View>
       ))}
@@ -125,13 +156,11 @@ export const NatureBackground = () => {
         alignItems: 'flex-end',
         opacity: 0.3
       }}>
-        <Text style={{ fontSize: 50 }}>🌲</Text>
-        <Text style={{ fontSize: 40 }}>🦌</Text>
-        <Text style={{ fontSize: 50 }}>🌳</Text>
-        <Text style={{ fontSize: 45 }}>🦊</Text>
-        <Text style={{ fontSize: 50 }}>🌲</Text>
-        <Text style={{ fontSize: 40 }}>🐿️</Text>
-        <Text style={{ fontSize: 50 }}>🌳</Text>
+        {groundIcons.map((icon, idx) => (
+          <Text key={idx} style={{ fontSize: idx % 2 === 0 ? 46 : 38 }}>
+            {icon}
+          </Text>
+        ))}
       </View>
     </View>
   );

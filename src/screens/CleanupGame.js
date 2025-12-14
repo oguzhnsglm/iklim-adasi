@@ -96,6 +96,7 @@ export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
   const [showProfile, setShowProfile] = useState(false);
   const [showParentMode, setShowParentMode] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const { activeTheme } = useThemeProgress();
 
   const handleEnterGame = (mode) => {
     if (mode === "SELECTION") {
@@ -158,7 +159,15 @@ export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
   return (
     <View style={{ flex: 1 }}>
       <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} />
-      <NatureBackground />
+      <NatureBackground
+        key={activeTheme.id}
+        themeId={activeTheme.id}
+        palette={activeTheme.palette}
+        intensity={1}
+      />
+      {activeTheme.id === "pacific" && (
+        <OceanOverlay palette={activeTheme.palette} />
+      )}
       <ModeSelectionScreen
         onSelectMode={handleEnterGame}
         onShowForest={() => setShowForest(true)}
@@ -181,7 +190,7 @@ function ModeSelectionScreen({
   darkMode,
   onToggleDark,
 }) {
-  const { themes, activeTheme } = useThemeProgress();
+  const { themes, activeTheme, setActiveTheme } = useThemeProgress();
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
   const [totalScore, setTotalScore] = useState(0);
   const [activeSide, setActiveSide] = useState('GAMES');
@@ -226,6 +235,13 @@ function ModeSelectionScreen({
   const currentLevelIndex = activeTheme.completedLevels || 0;
   const currentBadge = currentTasks[currentLevelIndex] || currentTasks[0];
   const currentTaskTitle = currentBadge ? currentBadge.title : '';
+
+  const handleSelectTheme = (themeId) => {
+    const theme = themes.find((t) => t.id === themeId);
+    if (!theme || !theme.unlocked) return;
+    if (themeId === activeTheme.id) return;
+    setActiveTheme(themeId);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -291,7 +307,7 @@ function ModeSelectionScreen({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerRow}>
-          <Text style={styles.logoText}>DOĞAYI KORU</Text>
+              <Text style={styles.logoText}>DOĞAYI KORU</Text>
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={onShowProfile}>
               <Text style={styles.headerIcon}>👤</Text>
@@ -376,21 +392,26 @@ function ModeSelectionScreen({
             <Text style={styles.sectionTitle}>Temalar</Text>
             <View style={styles.gameGrid}>
               {themes.map((theme) => (
-                <View
+                <TouchableOpacity
                   key={theme.id}
                   style={[
                     styles.themeCard,
+                    !theme.unlocked && styles.themeCardLocked,
+                    theme.id === activeTheme.id && styles.themeCardActive,
                     {
                       borderColor: theme.palette?.accent || THEME.accent,
                     },
                   ]}
+                  onPress={() => handleSelectTheme(theme.id)}
+                  activeOpacity={theme.unlocked ? 0.9 : 1}
+                  disabled={!theme.unlocked}
                 >
                   <Text style={styles.themeIcon}>{theme.icon}</Text>
                   <Text style={styles.themeName}>{theme.name}</Text>
                   <Text style={styles.themeProgress}>
                     {theme.completedLevels}/{theme.maxLevels} seviye · {theme.badges.length} rozet
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -449,6 +470,66 @@ function ModeSelectionScreen({
           </View>
         )}
       </KeyboardScrollView>
+    </View>
+  );
+}
+
+function OceanOverlay({ palette }) {
+  const deep = palette?.background || "#012a4a";
+  const mid = palette?.wave || "#0369A1";
+  const icons = ["🐠", "🐟", "🦀", "🐚", "🪼", "🐙", "🐬", "🐳", "⭐", "🌊"];
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        { backgroundColor: deep, opacity: 0.9 },
+      ]}
+    >
+      <View
+        style={{
+          position: "absolute",
+          top: -120,
+          left: -80,
+          width: 260,
+          height: 260,
+          borderRadius: 130,
+          backgroundColor: mid,
+          opacity: 0.35,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: -40,
+          right: -60,
+          width: 200,
+          height: 200,
+          borderRadius: 100,
+          backgroundColor: palette?.accent || "#0ea5e9",
+          opacity: 0.28,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 90,
+          flexDirection: "row",
+          justifyContent: "space-around",
+          alignItems: "flex-end",
+          opacity: 0.55,
+        }}
+      >
+        {icons.map((icon, idx) => (
+          <Text key={idx} style={{ fontSize: idx % 2 === 0 ? 42 : 34 }}>
+            {icon}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }
@@ -786,6 +867,14 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
+  themeCardLocked: {
+    opacity: 0.6,
+  },
+  themeCardActive: {
+    borderWidth: 2,
+    shadowColor: THEME.accent,
+    shadowOpacity: 0.25,
+  },
   themeIcon: {
     fontSize: 26,
     marginBottom: 4,
@@ -801,4 +890,3 @@ const styles = StyleSheet.create({
     color: THEME.textDark,
   },
 });
-

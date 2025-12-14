@@ -21,40 +21,84 @@ export const COLORS = {
 export const TRASH_TYPES = ["plastic", "paper", "glass", "metal", "organic"];
 
 export const TRASH_CONFIG = {
-  plastic: { id: 'plastic', icon: '🥤', label: 'PLASTİK', color: COLORS.plastic, bgColor: '#FEF3C7' },
-  paper:   { id: 'paper',   icon: '📄', label: 'KAĞIT',   color: COLORS.paper, bgColor: '#DBEAFE' },
-  glass:   { id: 'glass',   icon: '🍾', label: 'CAM',     color: COLORS.glassBin, bgColor: '#D1FAE5' },
-  metal:   { id: 'metal',   icon: '⚙️', label: 'METAL',   color: COLORS.metal, bgColor: '#FECACA' },
-  organic: { id: 'organic', icon: '🍂', label: 'ORGANİK', color: COLORS.organic, bgColor: '#FED7AA' }
+  plastic: { id: 'plastic', icon: '\u{1F964}', label: 'PLASTIK', color: COLORS.plastic, bgColor: '#FEF3C7' },
+  paper:   { id: 'paper',   icon: '\u{1F4C4}', label: 'KAGIT',   color: COLORS.paper, bgColor: '#DBEAFE' },
+  glass:   { id: 'glass',   icon: '\u{1F37E}', label: 'CAM',     color: COLORS.glassBin, bgColor: '#D1FAE5' },
+  metal:   { id: 'metal',   icon: '\u2699',     label: 'METAL',   color: COLORS.metal, bgColor: '#FECACA' },
+  organic: { id: 'organic', icon: '\u{1F342}', label: 'ORGANIK', color: COLORS.organic, bgColor: '#FED7AA' }
 };
 
-// Arka Plan Efektleri (Orman & Hayvanlar)
+
+// Arka Plan Efektleri (Orman & Okyanus & Çöl & Kutup)
 export const NatureBackground = ({
+  themeId = "rainforest",
   intensity = 1,
-  baseColor = COLORS.bgDeep,
-  midColor = COLORS.bgMid
+  baseColor,
+  midColor,
 } = {}) => {
   const { width, height } = useWindowDimensions();
-  
-  const elements = useRef(null);
-  
-  if (!elements.current) {
-    elements.current = [...Array(15)].map(() => {
-      const isAnimal = Math.random() > 0.7;
-      return {
-        anim: new Animated.Value(0),
-        left: Math.random() * width,
-        size: Math.random() * 20 + 10,
-        speed: Math.random() * 8000 + 6000,
-        delay: Math.random() * 5000,
-        isAnimal,
-        icon: isAnimal ? (Math.random() > 0.5 ? '🦋' : '🐦') : '🍃'
-      };
-    });
+
+  const isPacific = themeId === "pacific";
+  const isDesert = themeId === "sahara";
+  const isArctic = themeId === "antarctica";
+  const themeColors = isPacific
+    ? { deep: "#0c4b72", mid: "#0e76a8", beam: "rgba(255,255,255,0.08)" }
+    : isDesert
+      ? { deep: "#c26d2c", mid: "#eab676", beam: "rgba(255,199,120,0.22)" }
+      : isArctic
+        ? { deep: "#0b4a74", mid: "#0ea5e9", beam: "rgba(255,255,255,0.18)" }
+        : { deep: COLORS.bgDeep, mid: COLORS.bgMid, beam: "rgba(255,255,255,0.08)" };
+
+  const deep = baseColor || themeColors.deep;
+  const mid = midColor || themeColors.mid;
+  const beamColor = themeColors.beam;
+
+  const floatIcons = isPacific
+    ? ['\u{1F420}', '\u{1F41F}', '\u{1F42C}', '\u{1F433}', '\u{1F419}', '\u{1F980}', '\u{1F30A}', '\u{2B50}']
+    : isDesert
+      ? ['\u{1F335}', '\u{1F42A}', '\u2600', '\u{1F98E}', '\u{1F982}', '\u{1F30C}', '\u{1F4A8}']
+      : isArctic
+        ? ['\u2744', '\u2603', '\u{1F427}', '\u{1F9CA}', '\u{1F98A}', '\u{26C4}', '\u{1F3D4}', '\u{1F30C}']
+        : ['\u{1F98B}', '\u{1F426}', '\u{1F343}'];
+
+  const groundIcons = isPacific
+    ? ['\u{1F41F}', '\u{1F41A}', '\u{1F980}', '\u{1F433}', '\u{1F42C}', '\u{1F30A}', '\u{2B50}']
+    : isDesert
+      ? ['\u{1F335}', '\u{1F42A}', '\u{1F32C}', '\u{1F30C}', '\u{1F336}', '\u{1F335}']
+      : isArctic
+        ? ['\u2744', '\u{1F427}', '\u{1F9CA}', '\u{1F3D4}', '\u{26C4}', '\u2744']
+        : ['\u{1F332}', '\u{1F98C}', '\u{1F333}', '\u{1F98A}', '\u{1F332}', '\u{1F43F}', '\u{1F333}'];
+
+  const elementsRef = useRef([]);
+  const loopsRef = useRef([]);
+  const lastThemeRef = useRef(themeId);
+
+  const buildElements = () =>
+    [...Array(15)].map(() => ({
+      anim: new Animated.Value(0),
+      left: Math.random() * width,
+      size: Math.random() * 20 + 10,
+      speed: Math.random() * 8000 + 6000,
+      delay: Math.random() * 5000,
+      icon: floatIcons[Math.floor(Math.random() * floatIcons.length)],
+    }));
+
+  if (elementsRef.current.length === 0) {
+    elementsRef.current = buildElements();
+    lastThemeRef.current = themeId;
   }
 
   useEffect(() => {
-    const animations = elements.current.map(e =>
+    const themeChanged = lastThemeRef.current !== themeId;
+    lastThemeRef.current = themeId;
+
+    loopsRef.current.forEach((anim) => anim?.stop && anim.stop());
+
+    if (themeChanged) {
+      elementsRef.current = buildElements();
+    }
+
+    const animations = elementsRef.current.map((e) =>
       Animated.loop(
         Animated.sequence([
           Animated.delay(e.delay),
@@ -62,113 +106,127 @@ export const NatureBackground = ({
             toValue: 1,
             duration: e.speed,
             easing: Easing.linear,
-            useNativeDriver: true
+            useNativeDriver: true,
           }),
           Animated.timing(e.anim, {
             toValue: 0,
             duration: 0,
-            useNativeDriver: true
-          })
+            useNativeDriver: true,
+          }),
         ])
       )
     );
-    
-    animations.forEach(anim => anim.start());
-    
+
+    loopsRef.current = animations;
+    animations.forEach((anim) => anim.start());
+
     return () => {
-      animations.forEach(anim => anim.stop());
+      animations.forEach((anim) => anim.stop());
     };
-  }, []);
+  }, [themeId, width, height]);
 
   const normalizedIntensity = Math.max(0, Math.min(1, intensity));
-  const visibleCount = normalizedIntensity <= 0 ? 0 : Math.max(1, Math.round(normalizedIntensity * elements.current.length));
+  const visibleCount =
+    normalizedIntensity <= 0
+      ? 0
+      : Math.max(1, Math.round(normalizedIntensity * elementsRef.current.length));
   const ambientOpacity = 0.2 + normalizedIntensity * 0.6;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: baseColor, overflow: 'hidden' }]}>
-      <View style={{
-        position: 'absolute',
-        top: -height * 0.2,
-        left: -width * 0.2,
-        width: width * 1.4,
-        height: width * 1.4,
-        borderRadius: width,
-        backgroundColor: midColor,
-        opacity: 0.2 + normalizedIntensity * 0.5,
-        transform: [{ scaleX: 1.5 }]
-      }} />
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { backgroundColor: deep, overflow: "hidden" }]}
+    >
+      <View
+        style={{
+          position: "absolute",
+          top: -height * 0.2,
+          left: -width * 0.2,
+          width: width * 1.4,
+          height: width * 1.4,
+          borderRadius: width,
+          backgroundColor: mid,
+          opacity: 0.2 + normalizedIntensity * 0.5,
+          transform: [{ scaleX: 1.5 }],
+        }}
+      />
 
-      <View style={{
-        position: 'absolute',
-        top: -100,
-        left: width * 0.2,
-        width: 60,
-        height: height * 1.5,
-        backgroundColor: 'rgba(255,255,255,0.08)',
-        transform: [{ rotate: '25deg' }],
-        opacity: 0.1 + normalizedIntensity * 0.4
-      }} />
-      <View style={{
-        position: 'absolute',
-        top: -100,
-        left: width * 0.5,
-        width: 80,
-        height: height * 1.5,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        transform: [{ rotate: '20deg' }],
-        opacity: 0.08 + normalizedIntensity * 0.35
-      }} />
+      <View
+        style={{
+          position: "absolute",
+          top: -100,
+          left: width * 0.2,
+          width: 60,
+          height: height * 1.5,
+          backgroundColor: beamColor,
+          transform: [{ rotate: "25deg" }],
+          opacity: 0.1 + normalizedIntensity * 0.4,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: -100,
+          left: width * 0.5,
+          width: 80,
+          height: height * 1.5,
+          backgroundColor: beamColor,
+          transform: [{ rotate: "20deg" }],
+          opacity: 0.08 + normalizedIntensity * 0.35,
+        }}
+      />
 
-      {elements.current && elements.current.slice(0, visibleCount).map((e, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            position: 'absolute',
-            left: e.left,
-            bottom: -50,
-            transform: [{
-              translateY: e.anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, -height - 100]
-              })
-            }, {
-              rotate: e.anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0deg', '360deg']
-              })
-            }],
-            opacity: ambientOpacity
-          }}
-        >
-          <Text style={{ fontSize: e.size }}>
-            {e.icon}
+      {elementsRef.current &&
+        elementsRef.current.slice(0, visibleCount).map((e, i) => (
+          <Animated.View
+            key={i}
+            style={{
+              position: "absolute",
+              left: e.left,
+              bottom: -50,
+              transform: [
+                {
+                  translateY: e.anim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -height - 100],
+                  }),
+                },
+                {
+                  rotate: e.anim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ["0deg", "360deg"],
+                  }),
+                },
+              ],
+              opacity: ambientOpacity,
+            }}
+          >
+            <Text style={{ fontSize: e.size }}>{e.icon}</Text>
+          </Animated.View>
+        ))}
+
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 80,
+          flexDirection: "row",
+          justifyContent: "space-around",
+          alignItems: "flex-end",
+          opacity: 0.1 + normalizedIntensity * 0.6,
+        }}
+      >
+        {groundIcons.map((icon, idx) => (
+          <Text key={idx} style={{ fontSize: idx % 2 === 0 ? 50 : 40 }}>
+            {icon}
           </Text>
-        </Animated.View>
-      ))}
-
-      <View style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 80,
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'flex-end',
-        opacity: 0.1 + normalizedIntensity * 0.6
-      }}>
-        <Text style={{ fontSize: 50 }}>🌲</Text>
-        <Text style={{ fontSize: 40 }}>🦌</Text>
-        <Text style={{ fontSize: 50 }}>🌳</Text>
-        <Text style={{ fontSize: 45 }}>🦊</Text>
-        <Text style={{ fontSize: 50 }}>🌲</Text>
-        <Text style={{ fontSize: 40 }}>🐿️</Text>
-        <Text style={{ fontSize: 50 }}>🌳</Text>
+        ))}
       </View>
     </View>
   );
 };
-
 // 3D Görünümlü Kova
 export const Bin3D = ({ type, style, label, icon, isSelected, onClick }) => {
   const cfg = TRASH_CONFIG[type];

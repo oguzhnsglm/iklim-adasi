@@ -3,7 +3,7 @@
     "name": "Atık Oyunu",
     "slug": "atik-oyunu",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "jsEngine": "hermes",
     "assetBundlePatterns": ["**/*"],
     "android": {

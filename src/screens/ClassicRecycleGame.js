@@ -189,60 +189,92 @@ const RisingBubble = ({ width, height }) => {
   );
 };
 
-// --- ANA ARKA PLAN BİLEŞENİ ---
+// --- ANA ARKA PLAN BİLEŞENİ (Gerçekçi çöl teması) ---
 const OceanBackground = () => {
   const { width, height } = useWindowDimensions();
 
-  // 5 Adet Balık, 8 Adet Baloncuk oluşturuyoruz.
-  // Her biri kendi içinde "Wait -> Animate -> Reset" döngüsüne sahip.
-  // Bu sayede hepsi aynı anda gelmiyor, sürekli bir akış oluyor.
+  const skyHeight = height * 0.55;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: '#001e36', overflow: 'hidden' }]}>
-      
-      {/* --- KATMAN 1: STATİK ARKA PLAN (Performans için sabit) --- */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#001e36' }} />
-      
-      {/* Işık Efektleri */}
-      <View style={{
-        position: 'absolute', top: -height * 0.3, left: -width * 0.1,
-        width: width * 1.2, height: width * 1.2, borderRadius: width,
-        backgroundColor: '#006994', opacity: 0.3, transform: [{ scaleX: 1.5 }]
-      }} />
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: '#f4c583', overflow: 'hidden' }]}>
+      {/* Gökyüzü gradyanı (basit iki tonlu) */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: skyHeight,
+          backgroundColor: '#87CEEB',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: skyHeight * 0.4,
+          left: 0,
+          right: 0,
+          height: skyHeight * 0.8,
+          backgroundColor: '#FDB77A',
+          opacity: 0.6,
+        }}
+      />
 
-      {/* God Rays */}
-      <View style={{
-        position: 'absolute', top: -50, left: width * 0.3,
-        width: 80, height: height, backgroundColor: 'rgba(255,255,255,0.03)',
-        transform: [{ rotate: '15deg' }]
-      }} />
-      <View style={{
-        position: 'absolute', top: -50, left: width * 0.6,
-        width: 100, height: height, backgroundColor: 'rgba(255,255,255,0.02)',
-        transform: [{ rotate: '25deg' }]
-      }} />
+      {/* Uzak kum tepeleri (arka plan katmanı) */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: height * 0.2,
+          left: -width * 0.3,
+          width: width * 1.6,
+          height: height * 0.35,
+          backgroundColor: '#F3BF86',
+          borderTopLeftRadius: width,
+          borderTopRightRadius: width,
+        }}
+      />
 
-      {/* --- KATMAN 2: BAĞIMSIZ BALONCUKLAR --- */}
-      {[...Array(8)].map((_, i) => (
-        <RisingBubble key={`bubble-${i}`} width={width} height={height} />
-      ))}
+      {/* Orta mesafe kum tepesi */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: height * 0.1,
+          left: -width * 0.2,
+          width: width * 1.4,
+          height: height * 0.3,
+          backgroundColor: '#E6AD6A',
+          borderTopLeftRadius: width,
+          borderTopRightRadius: width,
+        }}
+      />
 
-      {/* --- KATMAN 3: BAĞIMSIZ BALIKLAR --- */}
-      {[...Array(5)].map((_, i) => (
-        <SwimmingFish key={`fish-${i}`} width={width} height={height} />
-      ))}
+      {/* Ön plan kum zemini */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: -width * 0.1,
+          width: width * 1.2,
+          height: height * 0.25,
+          backgroundColor: '#D89A50',
+          borderTopLeftRadius: width,
+          borderTopRightRadius: width,
+        }}
+      />
 
-      {/* --- KATMAN 4: DENİZ TABANI (Statik) --- */}
-      <View style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, height: 60,
-        flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end',
-        paddingBottom: 5, opacity: 0.8
-      }}>
-        <Text style={{ fontSize: 40 }}>🪸</Text>
-        <Text style={{ fontSize: 30 }}>🌿</Text>
-        <Text style={{ fontSize: 45 }}>🪸</Text>
-        <Text style={{ fontSize: 35 }}>🌿</Text>
-        <Text style={{ fontSize: 25 }}>🐚</Text>
+      {/* Minimal dekor (performans dostu, dikkat dağıtmayan) */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: height * 0.18,
+          right: width * 0.15,
+          opacity: 0.7,
+          flexDirection: 'row',
+          alignItems: 'flex-end',
+        }}
+      >
+        <Text style={{ fontSize: 32 }}>🌵</Text>
+        <Text style={{ fontSize: 20, marginLeft: 6 }}>🌵</Text>
       </View>
     </View>
   );
@@ -259,6 +291,7 @@ export default function ClassicRecycleGame({ onBack }) {
 
   const lastTimeRef = useRef(null);
   const spawnTimerRef = useRef(0);
+  const rafIdRef = useRef(null);
 
   const spawnItem = () => {
     const type = TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)];
@@ -310,14 +343,19 @@ export default function ClassicRecycleGame({ onBack }) {
         
         if (lives <= 0) setPhase("ENDED");
       }
-      requestAnimationFrame(loop);
+      rafIdRef.current = requestAnimationFrame(loop);
     };
-    const raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    rafIdRef.current = requestAnimationFrame(loop);
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+      rafIdRef.current = null;
+    };
   }, [phase, score, lives, width, height]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#001e36' }}>
+    <View style={{ flex: 1, backgroundColor: '#f4c583' }}>
       <OceanBackground />
       {phase === "TUTORIAL" && (
         <TutorialModal 
@@ -376,9 +414,9 @@ export default function ClassicRecycleGame({ onBack }) {
         ))}
       </View>
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 20, paddingHorizontal: 10 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 24, paddingHorizontal: 16 }}>
         {TRASH_TYPES.map(type => (
-          <Bin3D key={type} type={type} style={{ width: width / 6 }} />
+          <Bin3D key={type} type={type} style={{ width: width / 5.5 }} />
         ))}
       </View>
 
@@ -400,7 +438,7 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
   const originalPos = useRef({ x: item.x, y: item.y });
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(1)).current;
-  const ITEM_SIZE = 70;
+  const ITEM_SIZE = Math.min(70, width * 0.18);
 
   useEffect(() => {
     if (!dragging) {
@@ -409,12 +447,11 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
     }
   }, [item.x, item.y, dragging]);
 
-  const handleMouseDown = (e) => {
-    e.preventDefault();
+  const startDragAt = (pageX, pageY) => {
     setDragging(true);
-    setPosition({ 
-      x: e.nativeEvent.pageX - ITEM_SIZE / 2, 
-      y: e.nativeEvent.pageY - ITEM_SIZE / 2 
+    setPosition({
+      x: pageX - ITEM_SIZE / 2,
+      y: pageY - ITEM_SIZE / 2,
     });
     Animated.spring(scale, {
       toValue: 1.2,
@@ -422,12 +459,12 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
     }).start();
   };
 
-  const handleMouseUp = (e) => {
+  const finishDragAt = (pageX, pageY) => {
     if (!dragging) return;
-    
-    const dropX = e.nativeEvent.pageX;
-    const dropY = e.nativeEvent.pageY;
-    
+
+    const dropX = pageX;
+    const dropY = pageY;
+
     setDragging(false);
     Animated.spring(scale, {
       toValue: 1,
@@ -435,7 +472,7 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
     }).start();
 
     const result = onDrop(dropX, dropY, item.type, item.id);
-    
+
     if (result === 'success') {
       Animated.parallel([
         Animated.timing(scale, {
@@ -447,7 +484,7 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
           toValue: 0,
           duration: 300,
           useNativeDriver: true,
-        })
+        }),
       ]).start();
     } else if (result === 'fail') {
       Animated.sequence([
@@ -460,12 +497,21 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
           toValue: 1,
           duration: 100,
           useNativeDriver: true,
-        })
+        }),
       ]).start();
       setPosition(originalPos.current);
     } else {
       setPosition(originalPos.current);
     }
+  };
+
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    startDragAt(e.nativeEvent.pageX, e.nativeEvent.pageY);
+  };
+
+  const handleMouseUp = (e) => {
+    finishDragAt(e.nativeEvent.pageX, e.nativeEvent.pageY);
   };
 
   useEffect(() => {
@@ -477,47 +523,7 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
         });
       };
       const handleGlobalMouseUp = (e) => {
-        const dropX = e.pageX;
-        const dropY = e.pageY;
-        
-        setDragging(false);
-        Animated.spring(scale, {
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
-
-        const result = onDrop(dropX, dropY, item.type, item.id);
-        
-        if (result === 'success') {
-          Animated.parallel([
-            Animated.timing(scale, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-            Animated.timing(opacity, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            })
-          ]).start();
-        } else if (result === 'fail') {
-          Animated.sequence([
-            Animated.timing(opacity, {
-              toValue: 0.3,
-              duration: 100,
-              useNativeDriver: true,
-            }),
-            Animated.timing(opacity, {
-              toValue: 1,
-              duration: 100,
-              useNativeDriver: true,
-            })
-          ]).start();
-          setPosition(originalPos.current);
-        } else {
-          setPosition(originalPos.current);
-        }
+        finishDragAt(e.pageX, e.pageY);
       };
 
       document.addEventListener('mousemove', handleGlobalMouseMove);
@@ -531,10 +537,34 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
 
   const cfg = TRASH_CONFIG[item.type];
 
+  const handleResponderGrant = (e) => {
+    const { pageX, pageY } = e.nativeEvent;
+    startDragAt(pageX, pageY);
+  };
+
+  const handleResponderMove = (e) => {
+    if (!dragging) return;
+    const { pageX, pageY } = e.nativeEvent;
+    setPosition({
+      x: pageX - ITEM_SIZE / 2,
+      y: pageY - ITEM_SIZE / 2,
+    });
+  };
+
+  const handleResponderRelease = (e) => {
+    const { pageX, pageY } = e.nativeEvent;
+    finishDragAt(pageX, pageY);
+  };
+
   return (
     <Animated.View
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
+      onMouseDown={Platform.OS === 'web' ? handleMouseDown : undefined}
+      onMouseUp={Platform.OS === 'web' ? handleMouseUp : undefined}
+      onStartShouldSetResponder={() => true}
+      onResponderGrant={handleResponderGrant}
+      onResponderMove={handleResponderMove}
+      onResponderRelease={handleResponderRelease}
+      onResponderTerminate={handleResponderRelease}
       style={{
         position: 'absolute',
         left: position.x,
@@ -545,13 +575,15 @@ const DraggableItem = ({ item, baseZIndex, width, height, onDrop }) => {
         opacity,
       }}
     >
-      <View style={{ 
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 70,
-        height: 70,
-      }}>
-        <Text style={{ fontSize: 50, filter: dragging ? 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' : 'none' }}>{cfg.icon}</Text>
+      <View
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: ITEM_SIZE,
+          height: ITEM_SIZE,
+        }}
+      >
+        <Text style={{ fontSize: ITEM_SIZE * 0.7 }}>{cfg.icon}</Text>
       </View>
     </Animated.View>
   );

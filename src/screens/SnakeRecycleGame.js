@@ -16,7 +16,7 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import { View, Platform, Text, TouchableOpacity, Animated, StyleSheet } from "react-native";
+import { View, Platform, Text, TouchableOpacity, Animated, StyleSheet, PanResponder } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import soundManager from '../utils/sounds';
 import { TutorialModal, NatureBackground } from './GameComponents';
@@ -528,6 +528,35 @@ export default function SnakeRecycleGame({ onBack }) {
     setNextDirection(newDir);
   };
 
+  // Swipe controls (mobile & touch)
+  const swipeResponder = useRef(
+    Platform.OS !== 'web'
+      ? PanResponder.create({
+          onStartShouldSetPanResponder: () => stateRef.current.phase === 'RUNNING',
+          onMoveShouldSetPanResponder: (evt, gestureState) => {
+            if (stateRef.current.phase !== 'RUNNING') return false;
+            const { dx, dy } = gestureState;
+            return Math.abs(dx) > 10 || Math.abs(dy) > 10;
+          },
+          onPanResponderRelease: (evt, gestureState) => {
+            if (stateRef.current.phase !== 'RUNNING') return;
+            const { dx, dy } = gestureState;
+            if (Math.abs(dx) < 16 && Math.abs(dy) < 16) return;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+              // Yatay sürükleme
+              if (dx > 0) handleDirectionChange({ dx: 1, dy: 0 });
+              else handleDirectionChange({ dx: -1, dy: 0 });
+            } else {
+              // Dikey sürükleme
+              if (dy > 0) handleDirectionChange({ dx: 0, dy: 1 });
+              else handleDirectionChange({ dx: 0, dy: -1 });
+            }
+          },
+        })
+      : null
+  ).current;
+
   // Keyboard controls
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -734,7 +763,7 @@ export default function SnakeRecycleGame({ onBack }) {
         <TutorialModal 
           title="🌍 Doğa Kurtarma"
           instructions={[
-            Platform.OS === 'web' ? "⌨️ Ok tuşları ile hareket et" : "🎮 Alt kontrolleri kullan",
+            Platform.OS === 'web' ? "⌨️ Ok tuşları ile hareket et" : "👆 Parmağınla sürükleyerek yön ver",
             "♻️ Zararlı atıkları topla ve doğayı temizle",
             "🌱 Temizledikçe doğa canlanır, çiçekler açar",
             "🚀 Her atık hızını artırır - dikkatli ol!",
@@ -813,7 +842,7 @@ export default function SnakeRecycleGame({ onBack }) {
       )}
 
       {/* GAME AREA */}
-      <View style={styles.gameArea}>
+      <View style={styles.gameArea} {...(swipeResponder ? swipeResponder.panHandlers : {})}>
         <View style={[
           styles.playfieldWrapper,
           {
@@ -948,30 +977,7 @@ export default function SnakeRecycleGame({ onBack }) {
         </Animated.View>
       )}
 
-      {/* Touch Controls (Mobile) */}
-      {Platform.OS !== 'web' && phase === "RUNNING" && (
-        <View style={styles.controls}>
-          <View style={styles.controlRow}>
-            <TouchableOpacity style={styles.controlButton} onPress={() => handleDirectionChange({ dx: 0, dy: -1 })}>
-              <Text style={styles.controlText}>▲</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.controlRow}>
-            <TouchableOpacity style={styles.controlButton} onPress={() => handleDirectionChange({ dx: -1, dy: 0 })}>
-              <Text style={styles.controlText}>◄</Text>
-            </TouchableOpacity>
-            <View style={styles.controlSpacer} />
-            <TouchableOpacity style={styles.controlButton} onPress={() => handleDirectionChange({ dx: 1, dy: 0 })}>
-              <Text style={styles.controlText}>►</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.controlRow}>
-            <TouchableOpacity style={styles.controlButton} onPress={() => handleDirectionChange({ dx: 0, dy: 1 })}>
-              <Text style={styles.controlText}>▼</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+      {/* Alt dokunmatik tuşlar kaldırıldı - yönlendirme artık swipe ile */}
 
       {/* Game Over */}
       {phase === "ENDED" && (

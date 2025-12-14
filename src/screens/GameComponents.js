@@ -231,14 +231,16 @@ export const NatureBackground = ({
 export const Bin3D = ({ type, style, label, icon, isSelected, onClick }) => {
   const cfg = TRASH_CONFIG[type];
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onClick} style={[styles.binWrapper, style, isSelected && styles.binSelected]}>
-      <View style={[styles.binRim, { borderColor: cfg.color }]} />
-      <View style={[styles.binBody, { borderColor: cfg.color }]}>
-        <View style={[styles.binBodyGradient, { backgroundColor: cfg.color }]} />
-        <View style={styles.binSticker}>
-          <Text style={{ fontSize: 20 }}>{cfg.icon}</Text>
-          <Text style={styles.binLabelText}>{cfg.label}</Text>
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onClick}
+      style={[styles.binWrapper, style, isSelected && styles.binSelected]}
+    >
+      <View style={[styles.binBody, { borderColor: cfg.color, backgroundColor: cfg.bgColor }]}>
+        <View style={styles.binIconCircle}>
+          <Text style={styles.binIconText}>{cfg.icon}</Text>
         </View>
+        <Text style={styles.binLabelText}>{cfg.label}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -398,46 +400,43 @@ const styles = StyleSheet.create({
   },
   binWrapper: {
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    paddingVertical: 6,
   },
   binSelected: {
-    transform: [{ scale: 1.1 }],
-    shadowColor: COLORS.accent,
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-  },
-  binRim: {
-    width: '100%',
-    height: 15,
-    borderRadius: 20,
-    borderWidth: 3,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    zIndex: 2,
-    marginBottom: -8,
+    transform: [{ scale: 1.05 }],
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
   },
   binBody: {
-    width: '90%',
-    height: 60,
-    borderBottomLeftRadius: 15,
-    borderBottomRightRadius: 15,
+    width: '100%',
+    borderRadius: 18,
     borderWidth: 2,
-    borderTopWidth: 0,
-    overflow: 'hidden',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  binIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: 4,
   },
-  binBodyGradient: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.8,
+  binIconText: {
+    fontSize: 22,
   },
-  binSticker: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignItems: 'center',
+  binLabelText: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+    color: '#111827',
   },
-  binLabelText: { fontSize: 10, fontWeight: 'bold', color: '#333' },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.85)',

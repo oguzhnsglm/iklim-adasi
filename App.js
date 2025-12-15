@@ -3,6 +3,7 @@ import { SafeAreaView, StatusBar, StyleSheet, View } from "react-native";
 import CleanupGame from "./src/screens/CleanupGame";
 import { THEME } from "./src/theme";
 import { ThemeProgressProvider } from "./src/ThemeProgressContext";
+import { ThemeWorldsProgressProvider } from "./src/ThemeWorldsProgressContext";
 import { ParentSettingsProvider, useParentSettings } from "./src/ParentSettingsContext";
 import { MascotProvider } from "./src/context/MascotContext";
 
@@ -43,11 +44,13 @@ function AppInner() {
 export default function App() {
   return (
     <ThemeProgressProvider>
-      <ParentSettingsProvider>
-        <MascotProvider>
-          <AppInner />
-        </MascotProvider>
-      </ParentSettingsProvider>
+      <ThemeWorldsProgressProvider>
+        <ParentSettingsProvider>
+          <MascotProvider>
+            <AppInner />
+          </MascotProvider>
+        </ParentSettingsProvider>
+      </ThemeWorldsProgressProvider>
     </ThemeProgressProvider>
   );
 }

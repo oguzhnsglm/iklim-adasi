@@ -61,9 +61,14 @@ export default function SnakeRecycleGame({ onBack }) {
   const SHIELD_MAX = 3;
   const BOOST_MAX = 3;
   const INVULN_MS = 1200; // 1.0–1.5s
+  const SHIELD_DURATION_MS = 10000; // 10s timed shield
   const BOOST_MS = 2500; // 2–3s
   const BOOST_SPEED_MULT = 1.5; // effective interval = currentSpeed / BOOST_SPEED_MULT
   const BOOST_FRUITS = ['🍎', '🍉', '🍓', '🍊'];
+
+  const CREATURE_TTL_MS = 12000;
+  const CREATURE_SPAWN_COOLDOWN_MS = 8000;
+  const LEVEL_SPEED_BONUS_MS = 10; // each level gets faster by this many ms
 
   // ============================================================================
   // CLIMATE MESSAGES (Educational tips)
@@ -91,16 +96,18 @@ export default function SnakeRecycleGame({ onBack }) {
   // ============================================================================
   // STATE MANAGEMENT
   // ============================================================================
-  const [phase, setPhase] = useState("TUTORIAL"); // TUTORIAL | RUNNING | PAUSED | ENDED
+  const [phase, setPhase] = useState("TUTORIAL"); // TUTORIAL | RUNNING | LEVEL_COMPLETE | PAUSED | ENDED
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
   const [cleanupMeter, setCleanupMeter] = useState(0); // 0-100: cleanup progress
   const [currentSpeed, setCurrentSpeed] = useState(BASE_SPEED);
 
+  const [level, setLevel] = useState(1);
+
   // Lives / shield charges / boost charges
   const [lives, setLives] = useState(LIVES_MAX);
   const [invulnerableUntil, setInvulnerableUntil] = useState(0);
-  const [shieldCount, setShieldCount] = useState(0);
+  const [shieldUntil, setShieldUntil] = useState(0);
   const [boostCount, setBoostCount] = useState(BOOST_MAX);
   const [boostActive, setBoostActive] = useState(false);
   
@@ -141,16 +148,18 @@ export default function SnakeRecycleGame({ onBack }) {
     creatures,
     lives,
     invulnerableUntil,
-    shieldCount,
+    shieldUntil,
     boostCount,
     boostActive,
     shieldItem,
     boostFruit,
+    level,
   });
   const moveIntervalRef = useRef(null);
   const messageTimeoutRef = useRef(null);
   const effectTimeoutsRef = useRef({});
   const boostTimeoutRef = useRef(null);
+  const creatureSpawnCooldownUntilRef = useRef(0);
   const specialOrderRef = useRef(shuffleSpecialTypes());
   const specialOrderIndexRef = useRef(0);
   const regularFoodCounterRef = useRef(0);
@@ -163,7 +172,7 @@ export default function SnakeRecycleGame({ onBack }) {
 
   // Slither-like render smoothing (render only)
   const renderTrailRef = useRef([]); // [{x,y}] in pixels
-  const TRAIL_SPACING = 6;
+  const TRAIL_SPACING = 4;
 
   // Invulnerability blink (lightweight)
   const invulnOpacity = useRef(new Animated.Value(1)).current;
@@ -279,8 +288,11 @@ export default function SnakeRecycleGame({ onBack }) {
     let result = currentCreatures || [];
     if (result.length >= MAX_CREATURES) return result;
 
+    const now = Date.now();
+    if (now < (creatureSpawnCooldownUntilRef.current || 0)) return result;
+
     // Small chance each tick to spawn a new creature
-    if (Math.random() > 0.05) return result;
+    if (Math.random() > 0.02) return result;
 
     const occupied = [
       ...snakeBody,
@@ -314,12 +326,17 @@ export default function SnakeRecycleGame({ onBack }) {
       ...base,
       ...pos,
       stepCounter: 0,
+      spawnedAt: now,
+      ttlMs: CREATURE_TTL_MS,
     };
+
+    creatureSpawnCooldownUntilRef.current = now + CREATURE_SPAWN_COOLDOWN_MS;
 
     return [...result, newCreature];
   };
 
   const isInvulnerableNow = () => Date.now() < invulnerableUntil;
+  const isTimedShieldNow = (until) => Date.now() < (until || 0);
 
   const startInvulnerability = (durationMs = INVULN_MS) => {
     const until = Date.now() + durationMs;
@@ -353,10 +370,9 @@ export default function SnakeRecycleGame({ onBack }) {
     if (snapshot.phase !== 'RUNNING') return;
     if (Date.now() < snapshot.invulnerableUntil) return;
 
-    // Shield charges protect first
-    if (snapshot.shieldCount > 0) {
-      setShieldCount(prev => Math.max(0, prev - 1));
-      startInvulnerability(INVULN_MS);
+    // Timed shield or special shield prevents damage (but still avoids rapid re-hits)
+    if (snapshot.activeEffects?.shield || isTimedShieldNow(snapshot.shieldUntil)) {
+      startInvulnerability(Math.min(450, INVULN_MS));
       return;
     }
 
@@ -376,7 +392,8 @@ export default function SnakeRecycleGame({ onBack }) {
     const snapshot = stateRef.current;
     if (snapshot.phase !== 'RUNNING') return current;
     if (current) return current;
-    if (Math.random() > 0.02) return current;
+    if (isTimedShieldNow(snapshot.shieldUntil)) return current;
+    if (Math.random() > 0.018) return current;
     const pos = getRandomEmptyCell(occupiedPositions);
     if (!pos) return current;
     return { ...pos, type: 'shield', icon: '🛡️' };
@@ -509,10 +526,10 @@ export default function SnakeRecycleGame({ onBack }) {
     };
   };
 
-  const computeSpeedForLength = (length, stageSpeedBoost = 0) => {
+  const computeSpeedForLength = (length, stageSpeedBoost = 0, levelBonusMs = 0) => {
     const growthSteps = Math.max(0, length - 3);
     const exponentialSpeed = BASE_SPEED * Math.pow(SPEED_DECAY, growthSteps / 2);
-    return Math.max(MIN_DYNAMIC_SPEED, exponentialSpeed - stageSpeedBoost);
+    return Math.max(MIN_DYNAMIC_SPEED, exponentialSpeed - stageSpeedBoost - levelBonusMs);
   };
 
   // ============================================================================
@@ -661,6 +678,8 @@ export default function SnakeRecycleGame({ onBack }) {
       creatures: currentCreatures,
       shieldItem: currentShieldItem,
       boostFruit: currentBoostFruit,
+      shieldUntil: currentShieldUntil,
+      level: currentLevel,
     } = stateRef.current;
     
     // Calculate new head position (may be outside grid)
@@ -679,7 +698,7 @@ export default function SnakeRecycleGame({ onBack }) {
     // SELF-COLLISION CHECK: Only check against body (not head)
     const hitSelf = currentSnake.slice(1).some(seg => seg.x === head.x && seg.y === head.y);
     
-    if (hitSelf && !effects.shield) {
+    if (hitSelf && !effects.shield && !isTimedShieldNow(currentShieldUntil)) {
       endGame();
       return;
     }
@@ -699,7 +718,8 @@ export default function SnakeRecycleGame({ onBack }) {
       
       // SPEED INCREASE: Get faster with each item plus stage bonus
       const stageForSpeed = getSnakeStage(newSnake.length);
-      newSpeed = computeSpeedForLength(newSnake.length, stageForSpeed.speedBoost);
+      const levelBonus = Math.max(0, (currentLevel - 1) * LEVEL_SPEED_BONUS_MS);
+      newSpeed = computeSpeedForLength(newSnake.length, stageForSpeed.speedBoost, levelBonus);
       
       setScore(newScore);
       setCleanupMeter(newCleanup);
@@ -732,7 +752,11 @@ export default function SnakeRecycleGame({ onBack }) {
 
     // Pickup: shield item (charges)
     if (currentShieldItem && head.x === currentShieldItem.x && head.y === currentShieldItem.y) {
-      setShieldCount(prev => Math.min(SHIELD_MAX, prev + 1));
+      const now = Date.now();
+      setShieldUntil(prev => {
+        const base = Math.max(prev || 0, now);
+        return Math.min(base + SHIELD_DURATION_MS, now + SHIELD_DURATION_MS * 2);
+      });
       setShieldItem(null);
       createParticles(head.x, head.y);
       if (soundManager.playScore) soundManager.playScore();
@@ -780,9 +804,20 @@ export default function SnakeRecycleGame({ onBack }) {
       }
     }
 
+    const nowForCreatures = Date.now();
+
     // Move existing creatures (simple wandering / chasing behaviour)
     if (newCreatures.length > 0) {
       newCreatures = moveCreatures(newCreatures, head, newSnake);
+    }
+
+    // Despawn creatures after TTL so they aren't always present
+    if (newCreatures.length > 0) {
+      newCreatures = newCreatures.filter(c => {
+        const ttl = c.ttlMs || CREATURE_TTL_MS;
+        if (!c.spawnedAt) return true;
+        return nowForCreatures - c.spawnedAt < ttl;
+      });
     }
 
     // Chance to spawn new creatures on empty cells
@@ -809,6 +844,16 @@ export default function SnakeRecycleGame({ onBack }) {
     if (nextBoost !== currentBoostFruit) setBoostFruit(nextBoost);
     
     setSnake(newSnake);
+
+    // Level completion: reaching 100% cleanup advances to next level
+    if (ateItem && newCleanup >= 100) {
+      if (moveIntervalRef.current) {
+        clearInterval(moveIntervalRef.current);
+        moveIntervalRef.current = null;
+      }
+      setPhase('LEVEL_COMPLETE');
+      return;
+    }
 
     // Render trail update (pixels): push head position and sample body from history
     const headPx = { x: head.x * GRID_SIZE, y: head.y * GRID_SIZE };
@@ -837,7 +882,8 @@ export default function SnakeRecycleGame({ onBack }) {
     // Smooth animation to new positions (slither-like sampling from trail)
     const trail = renderTrailRef.current;
     newSnake.forEach((seg, i) => {
-      const sampleIndex = Math.min(trail.length - 1, i * 8);
+      // Denser sampling keeps the body continuous (less "parça parça" look)
+      const sampleIndex = Math.min(trail.length - 1, i * 3);
       const target = trail[sampleIndex] || { x: seg.x * GRID_SIZE, y: seg.y * GRID_SIZE };
       if (snakePositions.current[i]) {
         Animated.timing(snakePositions.current[i], {
@@ -1021,11 +1067,12 @@ export default function SnakeRecycleGame({ onBack }) {
       creatures,
       lives,
       invulnerableUntil,
-      shieldCount,
+      shieldUntil,
       boostCount,
       boostActive,
       shieldItem,
       boostFruit,
+      level,
     };
   }, [
     snake,
@@ -1039,11 +1086,12 @@ export default function SnakeRecycleGame({ onBack }) {
     creatures,
     lives,
     invulnerableUntil,
-    shieldCount,
+    shieldUntil,
     boostCount,
     boostActive,
     shieldItem,
     boostFruit,
+    level,
   ]);
 
   // Update direction from queued next direction
@@ -1090,7 +1138,9 @@ export default function SnakeRecycleGame({ onBack }) {
 
   // Shield aura pulse
   useEffect(() => {
-    const active = phase === 'RUNNING' && shieldCount > 0;
+    const now = Date.now();
+    const msLeft = shieldUntil - now;
+    const active = phase === 'RUNNING' && msLeft > 0;
     if (!active) {
       if (shieldAuraAnimRef.current) {
         shieldAuraAnimRef.current.stop();
@@ -1108,7 +1158,15 @@ export default function SnakeRecycleGame({ onBack }) {
     );
     shieldAuraAnimRef.current = loop;
     loop.start();
-  }, [phase, shieldCount]);
+    const timeout = setTimeout(() => {
+      if (shieldAuraAnimRef.current) {
+        shieldAuraAnimRef.current.stop();
+        shieldAuraAnimRef.current = null;
+      }
+      shieldAuraScale.setValue(1);
+    }, msLeft + 25);
+    return () => clearTimeout(timeout);
+  }, [phase, shieldUntil]);
 
   // Particle animation
   useEffect(() => {
@@ -1177,9 +1235,10 @@ export default function SnakeRecycleGame({ onBack }) {
     setScore(0);
     setCleanupMeter(0);
     setCurrentSpeed(BASE_SPEED);
+    setLevel(1);
     setLives(LIVES_MAX);
     setInvulnerableUntil(0);
-    setShieldCount(0);
+    setShieldUntil(0);
     setBoostCount(BOOST_MAX);
     setBoostActive(false);
     setSnake([
@@ -1226,6 +1285,44 @@ export default function SnakeRecycleGame({ onBack }) {
     spawnWasteItem();
   };
 
+  const startNextLevel = () => {
+    const next = level + 1;
+    setLevel(next);
+    setCleanupMeter(0);
+    setCurrentSpeed(Math.max(60, BASE_SPEED - (next - 1) * LEVEL_SPEED_BONUS_MS));
+    setLives(LIVES_MAX);
+    setInvulnerableUntil(0);
+    setShieldUntil(0);
+    setBoostCount(BOOST_MAX);
+    setBoostActive(false);
+    setSnake([
+      { x: 11, y: 11 },
+      { x: 10, y: 11 },
+      { x: 9, y: 11 },
+    ]);
+    setDirection({ dx: 1, dy: 0 });
+    setNextDirection({ dx: 1, dy: 0 });
+    setParticles([]);
+    setClimateMessage(null);
+    setShowMessage(false);
+    setSpecialFood(null);
+    setShieldItem(null);
+    setBoostFruit(null);
+    resetSpecialEffects();
+    regularFoodCounterRef.current = 0;
+    pendingSpecialRef.current = 0;
+    creatureSpawnCooldownUntilRef.current = Date.now() + 1500;
+    renderTrailRef.current = [];
+    snakePositions.current = [
+      new Animated.ValueXY({ x: 11 * GRID_SIZE, y: 11 * GRID_SIZE }),
+      new Animated.ValueXY({ x: 10 * GRID_SIZE, y: 11 * GRID_SIZE }),
+      new Animated.ValueXY({ x: 9 * GRID_SIZE, y: 11 * GRID_SIZE }),
+    ];
+    setCreatures([]);
+    setPhase('RUNNING');
+    spawnWasteItem();
+  };
+
   // ============================================================================
   // RENDER
   // ============================================================================
@@ -1239,6 +1336,7 @@ export default function SnakeRecycleGame({ onBack }) {
   const shieldActive = activeEffects.shield;
   const wasteSize = GRID_SIZE * foodSizeMultiplier;
   const wasteOffset = (wasteSize - GRID_SIZE) / 2;
+  const shieldSecondsLeft = Math.max(0, Math.ceil((shieldUntil - Date.now()) / 1000));
 
   return (
     <View style={[styles.container, { backgroundColor: containerBackground }]}>
@@ -1339,7 +1437,7 @@ export default function SnakeRecycleGame({ onBack }) {
       {phase !== "TUTORIAL" && (
         <View style={styles.resourceRow}>
           <View style={styles.resourceBadge}>
-            <Text style={styles.resourceText}>🛡️ {shieldCount}/{SHIELD_MAX}</Text>
+            <Text style={styles.resourceText}>🛡️ {shieldSecondsLeft}s</Text>
           </View>
           <View style={styles.resourceBadge}>
             <Text style={styles.resourceText}>⚡ {boostCount}/{BOOST_MAX}</Text>
@@ -1387,7 +1485,7 @@ export default function SnakeRecycleGame({ onBack }) {
             }} />
 
             {/* Shield aura (uses shield charges, not the special-effect shield) */}
-            {phase === 'RUNNING' && shieldCount > 0 && snake.length > 0 && (
+            {phase === 'RUNNING' && shieldSecondsLeft > 0 && snake.length > 0 && (
               <Animated.View
                 pointerEvents="none"
                 style={[
@@ -1417,13 +1515,17 @@ export default function SnakeRecycleGame({ onBack }) {
               </View>
             ))}
 
-            {/* Snake - smooth animated rendering */}
+            {/* Snake - continuous body rendering (no grid blocks) */}
             {snake.map((segment, i) => {
               const isHead = i === 0;
               const animatedPos = snakePositions.current[i] || new Animated.ValueXY({ 
                 x: segment.x * GRID_SIZE, 
                 y: segment.y * GRID_SIZE 
               });
+
+              const baseSize = (GRID_SIZE - 2) * (activeEffects.miniSnake ? 0.92 : 1.05);
+              const segSize = isHead ? (GRID_SIZE - 2) : baseSize;
+              const segOffset = (GRID_SIZE - 2 - segSize) / 2;
               
               return (
                 <Animated.View
@@ -1434,21 +1536,27 @@ export default function SnakeRecycleGame({ onBack }) {
                       left: animatedPos.x,
                       top: animatedPos.y,
                       opacity: isInvulnerableNow() ? invulnOpacity : 1,
-                      width: GRID_SIZE - 2,
-                      height: GRID_SIZE - 2,
+                      width: segSize,
+                      height: segSize,
                       backgroundColor: isHead ? snakeStage.headColor : snakeStage.bodyColor,
-                      borderRadius: isHead ? (GRID_SIZE - 2) / 2 : Math.max(3, 4 * snakeScale),
-                      borderWidth: shieldActive && isHead ? 2 : 1,
-                      borderColor: shieldActive && isHead ? '#fde047' : (isHead ? snakeStage.borderColor : snakeStage.glowColor),
+                      borderRadius: segSize / 2,
+                      borderWidth: shieldActive && isHead ? 2 : 0,
+                      borderColor: shieldActive && isHead ? '#fde047' : 'transparent',
                       shadowColor: shieldActive && isHead ? '#fde047' : snakeStage.glowColor,
                       shadowOffset: { width: 0, height: 0 },
-                      shadowOpacity: isHead ? 0.65 : 0.25,
-                      shadowRadius: (isHead ? 8 : 4) * snakeScale,
-                      transform: snakeScale !== 1 ? [
-                        { translateX: ((GRID_SIZE - 2) * (1 - snakeScale)) / 2 },
-                        { translateY: ((GRID_SIZE - 2) * (1 - snakeScale)) / 2 },
-                        { scale: snakeScale }
-                      ] : []
+                      shadowOpacity: isHead ? 0.6 : 0.15,
+                      shadowRadius: (isHead ? 8 : 3) * snakeScale,
+                      transform: [
+                        ...(snakeScale !== 1
+                          ? [
+                              { translateX: ((GRID_SIZE - 2) * (1 - snakeScale)) / 2 },
+                              { translateY: ((GRID_SIZE - 2) * (1 - snakeScale)) / 2 },
+                              { scale: snakeScale }
+                            ]
+                          : []),
+                        { translateX: segOffset },
+                        { translateY: segOffset },
+                      ],
                     }
                   ]}
                 >
@@ -1588,6 +1696,23 @@ export default function SnakeRecycleGame({ onBack }) {
             </View>
           </View>
         </Animated.View>
+      )}
+
+      {/* Level Complete */}
+      {phase === 'LEVEL_COMPLETE' && (
+        <View style={styles.levelOverlay}>
+          <View style={styles.levelBox}>
+            <Text style={styles.levelTitle}>✅ Seviye Tamamlandı</Text>
+            <Text style={styles.levelSubtitle}>Seviye {level}</Text>
+            <Text style={styles.levelHelper}>Harika! Dünyayı temizledin. Bir sonraki seviyeye geçelim.</Text>
+            <TouchableOpacity style={styles.levelContinueButton} onPress={startNextLevel}>
+              <Text style={styles.levelContinueText}>➡️ Sonraki Seviye</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.levelMenuButton} onPress={onBack}>
+              <Text style={styles.levelMenuText}>📋 Menü</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -1894,6 +2019,68 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(74, 222, 128, 0.6)',
     alignItems: 'center',
     minWidth: 300,
+  },
+  levelOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  levelBox: {
+    width: '88%',
+    maxWidth: 460,
+    backgroundColor: 'rgba(15, 23, 42, 0.96)',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(74, 222, 128, 0.45)',
+  },
+  levelTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#E8F5E9',
+    textAlign: 'center',
+  },
+  levelSubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#86efac',
+    textAlign: 'center',
+  },
+  levelHelper: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#d1d5db',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  levelContinueButton: {
+    marginTop: 14,
+    backgroundColor: 'rgba(34, 197, 94, 0.9)',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  levelContinueText: {
+    color: '#0b2a14',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  levelMenuButton: {
+    marginTop: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  levelMenuText: {
+    color: '#E5E7EB',
+    fontWeight: '800',
+    fontSize: 13,
   },
   gameOverTitle: {
     fontSize: 32,

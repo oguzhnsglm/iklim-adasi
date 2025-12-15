@@ -9,6 +9,7 @@ class SoundManager {
     this.enabled = true;
     this.musicEnabled = true;
     this.currentMusic = null;
+    this.currentMusicKey = null;
     this.isInitialized = false;
   }
 
@@ -114,6 +115,58 @@ class SoundManager {
     playNote();
   }
 
+  // Tema bazlı müzik (basit loop). Web Audio destekli ortamlarda çalışır.
+  playThemeMusic(themeId) {
+    if (!this.musicEnabled || !this.audioContext) return;
+
+    const melodies = {
+      rainforest: [
+        { freq: 392, duration: 0.25 },
+        { freq: 523.25, duration: 0.25 },
+        { freq: 659.25, duration: 0.35 },
+        { freq: 587.33, duration: 0.25 },
+        { freq: 523.25, duration: 0.35 },
+        { freq: 493.88, duration: 0.25 },
+      ],
+      pacific: [
+        { freq: 440, duration: 0.25 },
+        { freq: 493.88, duration: 0.25 },
+        { freq: 523.25, duration: 0.35 },
+        { freq: 587.33, duration: 0.35 },
+        { freq: 659.25, duration: 0.45 },
+      ],
+      sahara: [
+        { freq: 329.63, duration: 0.35 },
+        { freq: 392, duration: 0.25 },
+        { freq: 440, duration: 0.35 },
+        { freq: 392, duration: 0.25 },
+        { freq: 349.23, duration: 0.45 },
+      ],
+      antarctica: [
+        { freq: 523.25, duration: 0.3 },
+        { freq: 659.25, duration: 0.3 },
+        { freq: 783.99, duration: 0.35 },
+        { freq: 659.25, duration: 0.3 },
+        { freq: 587.33, duration: 0.45 },
+      ],
+    };
+
+    const melody = melodies[themeId] || melodies.rainforest;
+    this.stopBackgroundMusic();
+    this.currentMusicKey = `theme:${themeId}`;
+
+    let currentNote = 0;
+    const playNote = () => {
+      if (!this.musicEnabled) return;
+      const note = melody[currentNote];
+      this.playMusicNote(note.freq, note.duration);
+      currentNote = (currentNote + 1) % melody.length;
+      this.currentMusic = setTimeout(playNote, note.duration * 1000);
+    };
+
+    playNote();
+  }
+
   playMusicNote(frequency, duration) {
     if (!this.audioContext) return;
 
@@ -138,6 +191,11 @@ class SoundManager {
       clearTimeout(this.currentMusic);
       this.currentMusic = null;
     }
+    this.currentMusicKey = null;
+  }
+
+  stopThemeMusic() {
+    this.stopBackgroundMusic();
   }
 
   setEnabled(enabled) {

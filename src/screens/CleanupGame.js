@@ -15,6 +15,7 @@ import AchievementsScreen from './AchievementsScreen';
 import ProfileScreen from './ProfileScreen';
 import ParentModeScreen from './ParentModeScreen';
 import ThemeTasksScreen from './ThemeTasksScreen';
+import ThemeWorldsRoot from './ThemeWorldsRoot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { THEME } from '../theme';
 import { useThemeProgress } from '../ThemeProgressContext';
@@ -31,6 +32,7 @@ const BADGE_ICONS = ['🥉', '🥈', '🥇'];
 const SIDE_ITEMS = [
   { id: 'GAMES', icon: '🎮', label: 'Oyunlar' },
   { id: 'THEMES', icon: '✨', label: 'Temalar' },
+  { id: 'THEME_WORLDS', icon: '🌍', label: 'Tema Dünyaları' },
   { id: 'TASKS', icon: '📋', label: 'Görevler' },
 ];
 
@@ -95,6 +97,7 @@ export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
   const [showAchievements, setShowAchievements] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showParentMode, setShowParentMode] = useState(false);
+  const [showThemeWorlds, setShowThemeWorlds] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const { activeTheme } = useThemeProgress();
 
@@ -129,6 +132,10 @@ export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
 
   if (showParentMode) {
     return <ParentModeScreen onBack={() => setShowParentMode(false)} />;
+  }
+
+  if (showThemeWorlds) {
+    return <ThemeWorldsRoot onBack={() => setShowThemeWorlds(false)} />;
   }
 
   if (gameMode === "CLASSIC") {
@@ -174,6 +181,7 @@ export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
         onShowAchievements={() => setShowAchievements(true)}
         onShowProfile={() => setShowProfile(true)}
         onShowParentMode={() => setShowParentMode(true)}
+        onOpenThemeWorlds={() => setShowThemeWorlds(true)}
         darkMode={darkMode}
         onToggleDark={() => setDarkMode((v) => !v)}
       />
@@ -187,6 +195,7 @@ function ModeSelectionScreen({
   onShowAchievements,
   onShowProfile,
   onShowParentMode,
+  onOpenThemeWorlds,
   darkMode,
   onToggleDark,
 }) {
@@ -304,7 +313,11 @@ function ModeSelectionScreen({
       {SIDE_ITEMS.map((item) => {
         const selected = activeSide === item.id;
         const handlePress = () => {
-          setActiveSide(item.id);
+          if (item.id === 'THEME_WORLDS') {
+            if (onOpenThemeWorlds) onOpenThemeWorlds();
+          } else {
+            setActiveSide(item.id);
+          }
           if (isMobile) closeSidebar();
         };
 

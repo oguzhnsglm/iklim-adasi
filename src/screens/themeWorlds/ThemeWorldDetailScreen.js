@@ -220,7 +220,7 @@ function ThemeSection({
     >
       <themeStyles.BackgroundLayer palette={palette} stageW={sectionW} stageH={sectionH} micro={micro} visual={visual} />
       <CandyRoad themeId={themeId} stageW={sectionW} stageH={sectionH} />
-      <SideScenery themeId={themeId} stageW={sectionW} stageH={sectionH} />
+      <SideScenery themeId={themeId} stageW={sectionW} stageH={sectionH} micro={micro} visual={visual} />
 
       <View pointerEvents="none" style={styles.segmentHeader}>
         <Text style={styles.segmentHeaderTitle}>
@@ -419,14 +419,14 @@ function CandyRoad({ themeId, stageW, stageH }) {
   return <View pointerEvents="none" style={StyleSheet.absoluteFill}>{pieces}</View>;
 }
 
-function SideScenery({ themeId, stageW, stageH }) {
+function SideScenery({ themeId, stageW, stageH, micro, visual }) {
   const items = useMemo(() => {
     const w = stageW || 360;
     const h = stageH || 600;
     const leftX = Math.max(8, w * 0.12);
     const rightX = Math.max(8, w * 0.78);
 
-    const v = getThemeVisual(themeId);
+    const v = visual || getThemeVisual(themeId);
     const pool = v?.scenery?.edgeEmojis?.length ? v.scenery.edgeEmojis : ["🌿", "🌊", "🏜️", "❄️"];
 
     const res = [];
@@ -439,41 +439,213 @@ function SideScenery({ themeId, stageW, stageH }) {
       const icon = pool[i % pool.length];
       const size = 18 + (i % 3) * 6;
       const opacity = 0.22 + (i % 4) * 0.04;
+      const seed = ((i * 137) % 1000) / 1000; // deterministic phase offset [0..1)
+      const lane = onRight ? 1 : -1;
 
-      res.push({ key: `sc-${themeId}-${i}`, x, y, icon, size, opacity });
+      res.push({ key: `sc-${themeId}-${i}`, x, y, icon, size, opacity, seed, lane, index: i });
     }
     return res;
-  }, [themeId, stageW, stageH]);
+  }, [themeId, stageW, stageH, visual]);
+
+  const w = stageW || 360;
+
+  const isCreature = (emoji) => {
+    // Keep it tiny & deterministic; no assets required.
+    const set = new Set([
+      "🐒",
+      "🦉",
+      "🦌",
+      "🐿️",
+      "🦋",
+      "🐠",
+      "🪼",
+      "🐢",
+      "🐬",
+      "🦀",
+      "🐪",
+      "🦎",
+      "🦂",
+      "🐧",
+      "🦭",
+      "🐻‍❄️",
+    ]);
+    return set.has(emoji);
+  };
+
+  const animatedItems = items.map((it) => {
+    const phase = micro ? Animated.modulo(Animated.add(micro, it.seed), 1) : null;
+
+    const creature = isCreature(it.icon);
+    const amp = creature ? 10 : 6;
+
+    // Theme-specific feel:
+    // - rainforest: sway + tiny hop
+    // - pacific: swim sideways
+    // - sahara: drift + heat wobble
+    // - antarctica: bob + gentle sparkle
+    const swayX = phase
+      ? phase.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-amp, amp, -amp] })
+      : 0;
+    const swayY = phase
+      ? phase.interpolate({ inputRange: [0, 0.5, 1], outputRange: [amp * 0.25, -amp * 0.25, amp * 0.25] })
+      : 0;
+    const spin = phase
+      ? phase.interpolate({ inputRange: [0, 0.5, 1], outputRange: ["-6deg", "6deg", "-6deg"] })
+      : "0deg";
+
+    const swimX = phase
+      ? phase.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-10 * it.lane, 14 * it.lane, -10 * it.lane] })
+      : 0;
+    const bobY = phase
+      ? phase.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-4, 4, -4] })
+      : 0;
+
+    const shimmerX = phase
+      ? phase.interpolate({ inputRange: [0, 1], outputRange: [-3 * it.lane, 3 * it.lane] })
+      : 0;
+    const shimmerRot = phase
+      ? phase.interpolate({ inputRange: [0, 0.5, 1], outputRange: ["-2deg", "2deg", "-2deg"] })
+      : "0deg";
+
+    const sparkleOpacity = phase
+      ? phase.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.0, 0.22, 0.0] })
+      : 0;
+
+    let transform = [];
+    if (themeId === "pacific") transform = [{ translateX: swimX }, { translateY: bobY }];
+    else if (themeId === "sahara") transform = [{ translateX: shimmerX }, { rotate: shimmerRot }];
+    else if (themeId === "antarctica") transform = [{ translateY: bobY }, { rotate: spin }];
+    else transform = [{ translateX: swayX }, { translateY: swayY }, { rotate: spin }];
+
+    return (
+      <Animated.View
+        key={it.key}
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: it.x,
+          top: it.y,
+          opacity: it.opacity,
+          transform,
+        }}
+      >
+        <Text style={{ fontSize: it.size, opacity: 1 }}>{it.icon}</Text>
+
+        {themeId === "rainforest" && creature && (
+          <Animated.Text
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: it.lane > 0 ? -10 : 12,
+              top: 6,
+              fontSize: 12,
+              opacity: sparkleOpacity,
+            }}
+          >
+            🍃
+          </Animated.Text>
+        )}
+
+        {themeId === "pacific" && creature && (
+          <Animated.Text
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: it.lane > 0 ? -10 : 12,
+              bottom: 2,
+              fontSize: 12,
+              opacity: sparkleOpacity,
+            }}
+          >
+            🫧
+          </Animated.Text>
+        )}
+
+        {themeId === "sahara" && creature && (
+          <Animated.Text
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: it.lane > 0 ? -10 : 12,
+              bottom: 2,
+              fontSize: 12,
+              opacity: sparkleOpacity,
+            }}
+          >
+            💨
+          </Animated.Text>
+        )}
+
+        {themeId === "antarctica" && creature && (
+          <Animated.Text
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              right: -8,
+              bottom: -6,
+              fontSize: 12,
+              opacity: sparkleOpacity,
+            }}
+          >
+            ✨
+          </Animated.Text>
+        )}
+      </Animated.View>
+    );
+  });
+
+  const anchorPhase = micro ? Animated.modulo(micro, 1) : null;
+  const anchorBob = anchorPhase
+    ? anchorPhase.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -8, 0] })
+    : 0;
+  const anchorSway = anchorPhase
+    ? anchorPhase.interpolate({ inputRange: [0, 0.5, 1], outputRange: ["-4deg", "4deg", "-4deg"] })
+    : "0deg";
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {items.map((it) => (
-        <Text
-          key={it.key}
-          style={{
-            position: "absolute",
-            left: it.x,
-            top: it.y,
-            fontSize: it.size,
-            opacity: it.opacity,
-          }}
-        >
-          {it.icon}
-        </Text>
-      ))}
+      {animatedItems}
 
-      {/* A couple of larger anchors to make the map feel "alive" */}
+      {/* Larger anchors (non-interactive) */}
       {themeId === "rainforest" && (
-        <Text style={[styles.anchorEmoji, { left: 18, top: 46 }]}>🌳</Text>
+        <Animated.Text
+          style={[
+            styles.anchorEmoji,
+            { left: 18, top: 46, transform: [{ translateY: anchorBob }, { rotate: anchorSway }] },
+          ]}
+        >
+          🦌
+        </Animated.Text>
       )}
       {themeId === "pacific" && (
-        <Text style={[styles.anchorEmoji, { left: (stageW || 360) - 70, top: 52 }]}>🪸</Text>
+        <Animated.Text
+          style={[
+            styles.anchorEmoji,
+            { left: w - 78, top: 52, transform: [{ translateX: anchorBob }, { rotate: anchorSway }] },
+          ]}
+        >
+          🐢
+        </Animated.Text>
       )}
       {themeId === "sahara" && (
-        <Text style={[styles.anchorEmoji, { left: 18, top: 52 }]}>🌵</Text>
+        <Animated.Text
+          style={[
+            styles.anchorEmoji,
+            { left: 18, top: 52, transform: [{ translateY: anchorBob }, { rotate: anchorSway }] },
+          ]}
+        >
+          🐪
+        </Animated.Text>
       )}
       {themeId === "antarctica" && (
-        <Text style={[styles.anchorEmoji, { left: (stageW || 360) - 74, top: 52 }]}>🐧</Text>
+        <Animated.Text
+          style={[
+            styles.anchorEmoji,
+            { left: w - 82, top: 52, transform: [{ translateY: anchorBob }, { rotate: anchorSway }] },
+          ]}
+        >
+          🐻‍❄️
+        </Animated.Text>
       )}
     </View>
   );
@@ -510,22 +682,26 @@ function hexToRgba(hex, alpha) {
 function FogOverlay({ palette, themeId }) {
   // "Buğulu" görünüm: sahnenin üstüne hafif sis katmanı.
   // Not: pointerEvents none -> seviye tıklamaları etkilenmez.
-  const bg = palette?.background || "#E8F5E9";
-  const primary = palette?.primary || "#111827";
+  const v = getThemeVisual(themeId);
+  const base = v?.background?.baseColor || palette?.background || "#0B1220";
+  const fogTopHex = v?.background?.fogTop || base;
+  const fogMidHex = v?.background?.fogMid || base;
+  const fogBottomHex = v?.background?.fogBottom || base;
 
-  const topFog = themeId === "pacific" ? hexToRgba(bg, 0.28) : hexToRgba(bg, 0.35);
-  const midFog = hexToRgba(bg, 0.55);
-  const baseFog = hexToRgba(primary, themeId === "sahara" ? 0.10 : 0.12);
+  // More vivid color presence, but still soft and readable.
+  const topFog = hexToRgba(fogTopHex, themeId === "pacific" ? 0.26 : 0.30);
+  const midFog = hexToRgba(fogMidHex, 0.36);
+  const baseFog = hexToRgba(fogBottomHex, themeId === "sahara" ? 0.16 : 0.14);
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <LinearGradient
-        colors={[topFog, midFog, "rgba(255,255,255,0.10)"]}
+        colors={[topFog, midFog, "rgba(255,255,255,0.08)"]}
         locations={[0, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />
       <LinearGradient
-        colors={["rgba(0,0,0,0.18)", "rgba(0,0,0,0.00)", baseFog]}
+        colors={["rgba(0,0,0,0.16)", "rgba(0,0,0,0.00)", baseFog]}
         locations={[0, 0.45, 1]}
         style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
       />
@@ -534,8 +710,14 @@ function FogOverlay({ palette, themeId }) {
 }
 
 function getThemeStyles(themeId, palette) {
+  const rainforestVisual = getThemeVisual("rainforest");
+  const pacificVisual = getThemeVisual("pacific");
+  const saharaVisual = getThemeVisual("sahara");
+  const antarcticaVisual = getThemeVisual("antarctica");
+
   const rainforest = {
-    backgroundColor: hexToRgba(palette?.primary || "#166534", getThemeVisual("rainforest")?.background?.baseAlpha ?? 0.22),
+    // Use per-theme solid base colors to avoid transparent look.
+    backgroundColor: rainforestVisual?.background?.baseColor || "#14532D",
     BackgroundLayer: RainforestLayer,
     nodeStyle: {
       surface: { backgroundColor: "rgba(101, 67, 33, 0.36)", borderColor: "rgba(168, 109, 63, 0.55)" },
@@ -556,7 +738,7 @@ function getThemeStyles(themeId, palette) {
   };
 
   const pacific = {
-    backgroundColor: hexToRgba(palette?.primary || "#0369A1", getThemeVisual("pacific")?.background?.baseAlpha ?? 0.18),
+    backgroundColor: pacificVisual?.background?.baseColor || "#0C4A6E",
     BackgroundLayer: OceanLayer,
     nodeStyle: {
       surface: { backgroundColor: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.18)" },
@@ -577,7 +759,7 @@ function getThemeStyles(themeId, palette) {
   };
 
   const sahara = {
-    backgroundColor: hexToRgba(palette?.primary || "#C2410C", getThemeVisual("sahara")?.background?.baseAlpha ?? 0.10),
+    backgroundColor: saharaVisual?.background?.baseColor || "#B45309",
     BackgroundLayer: DesertLayer,
     nodeStyle: {
       surface: { backgroundColor: "rgba(251,191,36,0.14)", borderColor: "rgba(251,191,36,0.32)" },
@@ -598,7 +780,7 @@ function getThemeStyles(themeId, palette) {
   };
 
   const antarctica = {
-    backgroundColor: hexToRgba(palette?.primary || "#0ea5e9", getThemeVisual("antarctica")?.background?.baseAlpha ?? 0.14),
+    backgroundColor: antarcticaVisual?.background?.baseColor || "#075985",
     BackgroundLayer: IceLayer,
     nodeStyle: {
       surface: { backgroundColor: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.18)" },
@@ -908,9 +1090,10 @@ function RainforestLayer({ palette, stageW, stageH, micro }) {
               width: s,
               height: s,
               borderRadius: s / 2,
-              backgroundColor: "rgba(34,197,94,0.06)",
+              // White-toned soft spots (reduce the green translucent "bubble" look)
+              backgroundColor: "rgba(255,255,255,0.04)",
               borderWidth: 1,
-              borderColor: "rgba(74,222,128,0.10)",
+              borderColor: "rgba(255,255,255,0.06)",
             }}
           />
         );
@@ -1067,7 +1250,7 @@ function DesertLayer({ palette, stageW }) {
   );
 }
 
-function IceLayer({ palette, stageW, stageH }) {
+function IceLayer({ palette, stageW, stageH, micro }) {
   const sparkle = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     sparkle.setValue(0);
@@ -1086,6 +1269,36 @@ function IceLayer({ palette, stageW, stageH }) {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <FogOverlay palette={palette} themeId="antarctica" />
+
+      {/* lightweight falling snow (purely decorative) */}
+      {Array.from({ length: 14 }).map((_, idx) => {
+        const w = stageW || 360;
+        const h = stageH || 540;
+        const seed = ((idx * 97) % 1000) / 1000;
+        const phase = micro ? Animated.modulo(Animated.add(micro, seed), 1) : null;
+        const fallY = phase ? phase.interpolate({ inputRange: [0, 1], outputRange: [-30, h + 40] }) : 0;
+        const driftX = phase ? phase.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-8, 10, -8] }) : 0;
+        const x = 12 + ((idx * 61) % Math.max(160, w - 24));
+        const size = 3 + (idx % 3);
+        const opacity = 0.12 + (idx % 4) * 0.05;
+
+        return (
+          <Animated.View
+            key={`snow-${idx}`}
+            style={{
+              position: "absolute",
+              left: x,
+              top: -20,
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              backgroundColor: "rgba(255,255,255,0.9)",
+              opacity,
+              transform: [{ translateY: fallY }, { translateX: driftX }],
+            }}
+          />
+        );
+      })}
       <View
         style={{
           position: "absolute",
@@ -1177,6 +1390,8 @@ function Tree({ style }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    // Prevent underlying screens/backgrounds from bleeding through.
+    backgroundColor: "rgba(15,23,42,1)",
   },
   titleCard: {
     flexDirection: "row",

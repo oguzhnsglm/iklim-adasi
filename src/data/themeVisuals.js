@@ -12,11 +12,16 @@ export const themeVisuals = {
     id: "rainforest",
     name: "Orman",
     background: {
-      baseAlpha: 0.22,
+      // Solid + vivid base (avoid transparency look)
+      baseColor: "#14532D",
+      fogTop: "#16A34A",
+      fogMid: "#22C55E",
+      fogBottom: "#064E3B",
     },
     scenery: {
-      edgeEmojis: ["🌳", "🦉", "🦌", "🐒", "🦋", "🍄", "🌿"],
-      density: 12,
+      // Requested: trees + deer + squirrels + birds (decorative)
+      edgeEmojis: ["🌳", "🌲", "🌿", "🍃", "🦌", "🐿️", "🦉", "🐦", "🦜", "🐒", "🦋", "🍄"],
+      density: 13,
     },
     effects: {
       type: "leaf",
@@ -33,11 +38,14 @@ export const themeVisuals = {
     id: "pacific",
     name: "Okyanus",
     background: {
-      baseAlpha: 0.18,
+      baseColor: "#0C4A6E",
+      fogTop: "#0284C7",
+      fogMid: "#38BDF8",
+      fogBottom: "#075985",
     },
     scenery: {
-      edgeEmojis: ["🐠", "🪼", "🐢", "🐬", "🦀", "🪸", "🌊"],
-      density: 12,
+      edgeEmojis: ["🐠", "🐟", "🪼", "🐢", "🐬", "🦀", "🪸", "🐙", "🌊", "🫧"],
+      density: 13,
     },
     effects: {
       type: "wave",
@@ -54,11 +62,14 @@ export const themeVisuals = {
     id: "sahara",
     name: "Çöl",
     background: {
-      baseAlpha: 0.10,
+      baseColor: "#B45309",
+      fogTop: "#F59E0B",
+      fogMid: "#FBBF24",
+      fogBottom: "#92400E",
     },
     scenery: {
-      edgeEmojis: ["🌵", "🐪", "🦎", "🦂", "🪨", "🏜️"],
-      density: 11,
+      edgeEmojis: ["🌵", "🐪", "🦎", "🦂", "🐦", "🪨", "🏜️", "☀️"],
+      density: 12,
     },
     effects: {
       type: "heat",
@@ -75,11 +86,14 @@ export const themeVisuals = {
     id: "antarctica",
     name: "Buzul",
     background: {
-      baseAlpha: 0.14,
+      baseColor: "#075985",
+      fogTop: "#0EA5E9",
+      fogMid: "#67E8F9",
+      fogBottom: "#0C4A6E",
     },
     scenery: {
-      edgeEmojis: ["🐧", "🦭", "🐻‍❄️", "❄️", "🧊", "🌌"],
-      density: 11,
+      edgeEmojis: ["🐧", "🐻‍❄️", "🦭", "❄️", "🧊", "🌬️"],
+      density: 12,
     },
     effects: {
       type: "snow",

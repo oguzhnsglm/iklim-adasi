@@ -715,14 +715,26 @@ function getThemeStyles(themeId, palette) {
   const saharaVisual = getThemeVisual("sahara");
   const antarcticaVisual = getThemeVisual("antarctica");
 
+  const nodeBase = {
+    surface: {
+      backgroundColor: "rgba(255,255,255,0.94)",
+      borderColor: "rgba(255,255,255,0.55)",
+    },
+    inner: {
+      backgroundColor: "rgba(255,255,255,0.86)",
+      borderColor: "rgba(15,23,42,0.08)",
+    },
+  };
+
   const rainforest = {
     // Use per-theme solid base colors to avoid transparent look.
     backgroundColor: rainforestVisual?.background?.baseColor || "#14532D",
     BackgroundLayer: RainforestLayer,
     nodeStyle: {
-      surface: { backgroundColor: "rgba(101, 67, 33, 0.36)", borderColor: "rgba(168, 109, 63, 0.55)" },
-      inner: { backgroundColor: "rgba(0,0,0,0.10)", borderColor: "rgba(255,255,255,0.10)" },
-      labelColor: "rgba(255,255,255,0.94)",
+      surface: nodeBase.surface,
+      inner: nodeBase.inner,
+      // Number text should reflect the segment theme.
+      labelColor: rainforestVisual?.background?.fogTop || "#16A34A",
       motif: "🍃",
       motifOpacity: 0.9,
     },
@@ -741,9 +753,9 @@ function getThemeStyles(themeId, palette) {
     backgroundColor: pacificVisual?.background?.baseColor || "#0C4A6E",
     BackgroundLayer: OceanLayer,
     nodeStyle: {
-      surface: { backgroundColor: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.18)" },
-      inner: { backgroundColor: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.12)" },
-      labelColor: "rgba(255,255,255,0.94)",
+      surface: nodeBase.surface,
+      inner: nodeBase.inner,
+      labelColor: pacificVisual?.background?.fogTop || "#0284C7",
       motif: "🫧",
       motifOpacity: 0.75,
     },
@@ -762,9 +774,9 @@ function getThemeStyles(themeId, palette) {
     backgroundColor: saharaVisual?.background?.baseColor || "#B45309",
     BackgroundLayer: DesertLayer,
     nodeStyle: {
-      surface: { backgroundColor: "rgba(251,191,36,0.14)", borderColor: "rgba(251,191,36,0.32)" },
-      inner: { backgroundColor: "rgba(120, 53, 15, 0.10)", borderColor: "rgba(255,255,255,0.10)" },
-      labelColor: "rgba(255,255,255,0.92)",
+      surface: nodeBase.surface,
+      inner: nodeBase.inner,
+      labelColor: saharaVisual?.background?.fogTop || "#F59E0B",
       motif: "🪨",
       motifOpacity: 0.75,
     },
@@ -783,9 +795,9 @@ function getThemeStyles(themeId, palette) {
     backgroundColor: antarcticaVisual?.background?.baseColor || "#075985",
     BackgroundLayer: IceLayer,
     nodeStyle: {
-      surface: { backgroundColor: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.18)" },
-      inner: { backgroundColor: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.12)" },
-      labelColor: "rgba(255,255,255,0.94)",
+      surface: nodeBase.surface,
+      inner: nodeBase.inner,
+      labelColor: antarcticaVisual?.background?.fogTop || "#0EA5E9",
       motif: "🧊",
       motifOpacity: 0.7,
     },
@@ -809,6 +821,8 @@ function getThemeStyles(themeId, palette) {
 function NodeVisual({ themeId, label, selected, isCompleted, isUnlocked, stars, milestone, themeEnd, nodeStyle, completedStyle, lockedStyle, micro }) {
   const showMotif = !selected && !isCompleted;
 
+  const themeAccent = getThemeVisual(themeId)?.background?.fogTop || nodeStyle?.labelColor || "#16A34A";
+
   const leafDrift = micro
     ? micro.interpolate({ inputRange: [0, 1], outputRange: [0, -6] })
     : 0;
@@ -828,7 +842,7 @@ function NodeVisual({ themeId, label, selected, isCompleted, isUnlocked, stars, 
         style={[
           styles.nodeSurface,
           nodeStyle?.surface,
-          selected && styles.nodeSelected,
+          selected && { borderColor: themeAccent },
           !isUnlocked && styles.nodeLocked,
         ]}
       >

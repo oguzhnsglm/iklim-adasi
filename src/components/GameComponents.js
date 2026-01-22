@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, useWindowDimensions } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import soundManager from '../utils/sounds';
+import { useUserProgress } from '../UserProgressContext';
 
 // --- PREMIUM TEMA RENKLERİ ---
 export const COLORS = {

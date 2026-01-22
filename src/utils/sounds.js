@@ -213,6 +213,28 @@ class SoundManager {
       this.playBackgroundMusic();
     }
   }
+
+  // Genel play metodu
+  play(soundId) {
+    if (!this.enabled) return;
+    
+    switch (soundId) {
+      case "tap":
+        this.playTone(523.25, 0.1, 'sine', 0.3); // C5 - tap sesi
+        break;
+      case "success":
+        this.playSuccess();
+        break;
+      case "error":
+        this.playError();
+        break;
+      case "levelup":
+        this.playLevelUp();
+        break;
+      default:
+        this.playTone(440, 0.1, 'sine', 0.2); // A4
+    }
+  }
 }
 
 // Singleton instance

@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
-import { View, PanResponder, useWindowDimensions, StyleSheet, Text } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, PanResponder, useWindowDimensions, StyleSheet, Text, Platform } from "react-native";
+import * as ScreenOrientation from 'expo-screen-orientation';
 import soundManager from '../utils/sounds';
 import {
   TRASH_TYPES,
@@ -13,9 +14,60 @@ import {
 export default function SlingshotGame({ onBack }) {
   const { width, height } = useWindowDimensions();
   
-  // Dinamik boyutlandırma - mevcut ekran boyutunu doğrudan kullan
-  const gameW = width;
-  const gameH = height;
+  // Dinamik boyutlandırma: gerçek render alanını ölç (özellikle landscape + cihaz inset'lerinde taşmayı engeller)
+  const [gameLayout, setGameLayout] = useState({ w: width, h: height });
+  const gameW = gameLayout.w;
+  const gameH = gameLayout.h;
+
+  const onGameLayout = (e) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    if (!w || !h) return;
+    if (w === gameLayout.w && h === gameLayout.h) return;
+    setGameLayout({ w, h });
+  };
+
+  // Sadece bu oyunda yatay kilit (diğer ekranlar etkilenmesin)
+  const prevOrientationLockRef = useRef(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const prev = await ScreenOrientation.getOrientationLockAsync();
+        if (!cancelled) prevOrientationLockRef.current = prev;
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      } catch {
+        // no-op: orientation lock supported olmayabilir
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      (async () => {
+        try {
+          const prev = prevOrientationLockRef.current;
+          if (prev != null) {
+            await ScreenOrientation.lockAsync(prev);
+          } else {
+            await ScreenOrientation.unlockAsync();
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    };
+  }, []);
+
+  // Drag sırasında sürekli re-render olunca Math.random() ile yıldızlar her kare değişiyordu (kasıyor).
+  // Boyut değişmedikçe yıldızları sabitle.
+  const stars = useMemo(() => {
+    const count = 15;
+    return Array.from({ length: count }, () => ({
+      top: Math.random() * (gameH * 0.6),
+      left: Math.random() * gameW,
+      size: Math.max(1, Math.random() * 3),
+      opacity: Math.random(),
+    }));
+  }, [gameW, gameH]);
 
   // --- FÜTÜRİSTİK ÇÖL ARKA PLANI (Neon tema) ---
   const FuturisticDesertBackground = () => {
@@ -166,18 +218,18 @@ export default function SlingshotGame({ onBack }) {
         </View>
 
         {/* 2. YILDIZLAR (Basit noktalar) */}
-        {[...Array(15)].map((_, i) => (
+        {stars.map((s, i) => (
           <View
             key={i}
             style={{
               position: 'absolute',
-              top: Math.random() * (gameH * 0.6),
-              left: Math.random() * gameW,
-              width: Math.random() * 3,
-              height: Math.random() * 3,
+              top: s.top,
+              left: s.left,
+              width: s.size,
+              height: s.size,
               backgroundColor: '#fff',
               borderRadius: 2,
-              opacity: Math.random(),
+              opacity: s.opacity,
             }}
           />
         ))}
@@ -362,6 +414,115 @@ export default function SlingshotGame({ onBack }) {
     { type: "organic", x: startBinX + binSpacing * 4, y: binY },
   ];
 
+  const BIN_HIT_PADDING = Platform.OS === 'web'
+    ? 0
+    : Math.min(26, Math.max(14, Math.round(Math.min(gameW, gameH) * 0.03)));
+
+  const BIN_SIZE = Math.round(Math.max(70, Math.min(92, Math.min(gameW, gameH) * 0.12)));
+
+  // Global ekran koordinatını oyun alanı lokal koordinatına çevir (yatay/dikey tutarlı)
+  const panAreaRef = useRef(null);
+  const panAreaWindowRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
+  const rafDragRef = useRef(null);
+  const pendingDragPointRef = useRef(null);
+
+  const measurePanAreaInWindow = () => {
+    if (!panAreaRef.current || typeof panAreaRef.current.measureInWindow !== 'function') return;
+    panAreaRef.current.measureInWindow((x, y, w, h) => {
+      panAreaWindowRef.current = { x, y, w, h };
+    });
+  };
+
+  useEffect(() => {
+    // Orientation/ekran boyutu değişince ölçümü yenile
+    requestAnimationFrame(measurePanAreaInWindow);
+    return () => {
+      if (rafDragRef.current) {
+        cancelAnimationFrame(rafDragRef.current);
+        rafDragRef.current = null;
+      }
+    };
+  }, [gameW, gameH]);
+
+  const getLocalPointer = (evt, gestureState) => {
+    const win = panAreaWindowRef.current;
+
+    const pageX =
+      (gestureState && typeof gestureState.moveX === 'number' ? gestureState.moveX : undefined) ??
+      (evt?.nativeEvent && typeof evt.nativeEvent.pageX === 'number' ? evt.nativeEvent.pageX : undefined);
+    const pageY =
+      (gestureState && typeof gestureState.moveY === 'number' ? gestureState.moveY : undefined) ??
+      (evt?.nativeEvent && typeof evt.nativeEvent.pageY === 'number' ? evt.nativeEvent.pageY : undefined);
+
+    if (typeof pageX === 'number' && typeof pageY === 'number') {
+      return { x: pageX - win.x, y: pageY - win.y };
+    }
+
+    // Fallback: zaten lokal gelen event'ler
+    const { locationX, locationY } = evt?.nativeEvent || {};
+    return {
+      x: typeof locationX === 'number' ? locationX : SLING_CONFIG.anchorX,
+      y: typeof locationY === 'number' ? locationY : SLING_CONFIG.anchorY,
+    };
+  };
+
+  const launchFromPoint = (point) => {
+    if (!point) return false;
+    const { currentType } = stateRef.current;
+
+    let dx = point.x - SLING_CONFIG.anchorX;
+    let dy = point.y - SLING_CONFIG.anchorY;
+
+    const dist = Math.hypot(dx, dy);
+    if (dist < 10) return false;
+    if (dist > SLING_CONFIG.maxDrag) {
+      const ratio = SLING_CONFIG.maxDrag / dist;
+      dx *= ratio;
+      dy *= ratio;
+    }
+
+    const vx = -dx * SLING_CONFIG.powerScale;
+    const vy = -dy * SLING_CONFIG.powerScale;
+
+    setProjectile({
+      x: SLING_CONFIG.anchorX,
+      y: SLING_CONFIG.anchorY,
+      vx,
+      vy,
+      type: currentType,
+      active: true,
+    });
+    setCurrentType(TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)]);
+    setDragStart(null);
+    setDragCurrent(null);
+    pendingDragPointRef.current = null;
+    return true;
+  };
+
+  const getClampedDrag = (evt, gestureState) => {
+    const { x: localX, y: localY } = getLocalPointer(evt, gestureState);
+
+    let dx = localX - SLING_CONFIG.anchorX;
+    let dy = localY - SLING_CONFIG.anchorY;
+
+    const dist = Math.hypot(dx, dy);
+    if (dist > SLING_CONFIG.maxDrag) {
+      const ratio = SLING_CONFIG.maxDrag / dist;
+      dx *= ratio;
+      dy *= ratio;
+    }
+
+    return {
+      dx,
+      dy,
+      dist,
+      point: {
+        x: SLING_CONFIG.anchorX + dx,
+        y: SLING_CONFIG.anchorY + dy,
+      },
+    };
+  };
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => {
@@ -372,52 +533,49 @@ export default function SlingshotGame({ onBack }) {
         const { phase, projectile } = stateRef.current;
         return phase === "RUNNING" && !projectile;
       },
-      onPanResponderGrant: () => {
-        // Başlangıçta topu sapan noktasına yerleştir
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (evt, gestureState) => {
+        measurePanAreaInWindow();
+        const { point } = getClampedDrag(evt, gestureState);
         setDragStart({ x: SLING_CONFIG.anchorX, y: SLING_CONFIG.anchorY });
-        setDragCurrent({ x: SLING_CONFIG.anchorX, y: SLING_CONFIG.anchorY });
+        setDragCurrent(point);
       },
       onPanResponderMove: (evt, gestureState) => {
-        // Jestin başlangıcına göre göreli hareketi kullan (cihaz yönünden bağımsız)
-        let { dx, dy } = gestureState;
+        const { point } = getClampedDrag(evt, gestureState);
+        pendingDragPointRef.current = point;
 
-        const dist = Math.hypot(dx, dy);
-        if (dist > SLING_CONFIG.maxDrag) {
-          const ratio = SLING_CONFIG.maxDrag / dist;
-          dx *= ratio; dy *= ratio;
+        // Her move event'inde state set etmek yerine 60fps'e throttle et (kasıyı azaltır)
+        if (!rafDragRef.current) {
+          rafDragRef.current = requestAnimationFrame(() => {
+            rafDragRef.current = null;
+            if (pendingDragPointRef.current) setDragCurrent(pendingDragPointRef.current);
+          });
         }
-
-        setDragCurrent({
-          x: SLING_CONFIG.anchorX + dx,
-          y: SLING_CONFIG.anchorY + dy,
-        });
       },
       onPanResponderRelease: (evt, gestureState) => {
-        const { currentType } = stateRef.current;
-        let { dx, dy } = gestureState;
-        
-        const dist = Math.hypot(dx, dy);
-        // Çok küçük sürüklemelerde atış yapma
-        if (dist < 10) {
-          setDragStart(null); setDragCurrent(null);
-          return;
+        if (rafDragRef.current) {
+          cancelAnimationFrame(rafDragRef.current);
+          rafDragRef.current = null;
         }
 
-        if (dist > SLING_CONFIG.maxDrag) {
-          const r = SLING_CONFIG.maxDrag / dist; dx *= r; dy *= r;
+        const { point } = getClampedDrag(evt, gestureState);
+        const latestPoint = pendingDragPointRef.current || point || dragCurrent;
+        const didLaunch = launchFromPoint(latestPoint);
+        if (!didLaunch) {
+          setDragStart(null);
+          setDragCurrent(null);
+          pendingDragPointRef.current = null;
         }
-
-        // Çektiğin yönün tersi yöne fırlat
-        const vx = -dx * SLING_CONFIG.powerScale;
-        const vy = -dy * SLING_CONFIG.powerScale;
-
-        setProjectile({
-          x: SLING_CONFIG.anchorX, y: SLING_CONFIG.anchorY,
-          vx, vy,
-          type: currentType, active: true
-        });
-        setCurrentType(TRASH_TYPES[Math.floor(Math.random() * TRASH_TYPES.length)]);
-        setDragStart(null); setDragCurrent(null);
+      },
+      onPanResponderTerminate: () => {
+        // iOS bazen pointer'ı cancel/terminate eder; drag başladıysa throw yap.
+        const latestPoint = pendingDragPointRef.current || dragCurrent;
+        const didLaunch = launchFromPoint(latestPoint);
+        if (!didLaunch) {
+          setDragStart(null);
+          setDragCurrent(null);
+          pendingDragPointRef.current = null;
+        }
       }
     })
   ).current;
@@ -465,7 +623,7 @@ export default function SlingshotGame({ onBack }) {
 
         for (let bin of BINS) {
           // Kova ile çarpışma
-          if (Math.hypot(x - bin.x, y - bin.y) < hitRadius) {
+          if (Math.hypot(x - bin.x, y - bin.y) < (hitRadius + BIN_HIT_PADDING)) {
             if (vy > 0) { // Sadece düşerken girsin
               hit = true;
               if (bin.type === p.type) newScore = 15;
@@ -522,7 +680,7 @@ export default function SlingshotGame({ onBack }) {
     return () => cancelAnimationFrame(raf);
   }, [phase, gameW, gameH]);
   
-  const containerStyle = { width: gameW, height: gameH };
+  const containerStyle = { flex: 1 };
 
   const renderTrajectory = () => {
     if (!dragCurrent) return null;
@@ -541,60 +699,88 @@ export default function SlingshotGame({ onBack }) {
 
     const vx = aimX * SLING_CONFIG.powerScale;
     const vy = aimY * SLING_CONFIG.powerScale;
-    const angleRad = Math.atan2(vy, vx);
-    const angle = (angleRad * 180) / Math.PI;
-    const arrowLen = 40 + (powerRatio * 100);
-
     const dots = [];
-    
-    for (let i = 1; i <= 8; i++) {
-      const t = i * 0.15;
+
+    let prevPoint = null;
+    let lastPoint = null;
+    const dotCount = 10;
+    for (let i = 1; i <= dotCount; i++) {
+      const t = i * 0.13;
       const tx = SLING_CONFIG.anchorX + vx * t;
       const ty = SLING_CONFIG.anchorY + vy * t + 0.5 * SLING_CONFIG.gravity * t * t;
-      
+
+      prevPoint = lastPoint;
+      lastPoint = { x: tx, y: ty };
+
       dots.push(
-        <View key={`dot-${i}`} style={{
-          position: 'absolute', left: tx - 4, top: ty - 4,
-          width: 8, height: 8, borderRadius: 4,
-          backgroundColor: color, // İzler de renkli olsun
-          opacity: 0.7,
-          shadowColor: color, shadowOpacity: 1, shadowRadius: 5
-        }} />
+        <View
+          key={`dot-${i}`}
+          style={{
+            position: 'absolute',
+            left: tx - 4,
+            top: ty - 4,
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: color,
+            opacity: 0.25 + (i / dotCount) * 0.55,
+            shadowColor: color,
+            shadowOpacity: 0.9,
+            shadowRadius: 6,
+            zIndex: 20,
+          }}
+        />
       );
     }
 
+    const headSize = 14;
+    const headAngle = prevPoint && lastPoint
+      ? Math.atan2(lastPoint.y - prevPoint.y, lastPoint.x - prevPoint.x)
+      : Math.atan2(vy, vx);
+
     return (
       <>
-        <View style={{
-          position: 'absolute',
-          left: SLING_CONFIG.anchorX, top: SLING_CONFIG.anchorY,
-          width: arrowLen, height: 0,
-          transform: [{ rotate: `${angle}deg` }, { translateX: 0 }]
-        }}>
-           {/* Neon Ok */}
-           <View style={{
-             position: 'absolute', left: 0, top: -3,
-             width: arrowLen, height: 6,
-             backgroundColor: color, borderRadius: 3,
-             opacity: 1,
-             shadowColor: color, shadowOpacity: 1, shadowRadius: 10
-           }} />
-           <View style={{
-             position: 'absolute', right: -5, top: -8,
-             width: 0, height: 0,
-             borderTopWidth: 8, borderBottomWidth: 8, borderLeftWidth: 14,
-             borderTopColor: 'transparent', borderBottomColor: 'transparent',
-             borderLeftColor: color
-           }} />
-        </View>
         {dots}
+        {!!lastPoint && (
+          <View
+            style={{
+              position: 'absolute',
+              left: lastPoint.x - headSize / 2,
+              top: lastPoint.y - headSize / 2,
+              width: headSize,
+              height: headSize,
+              transform: [{ rotate: `${headAngle}rad` }],
+            }}
+          >
+            <View
+              style={{
+                position: 'absolute',
+                left: headSize * 0.15,
+                top: headSize * 0.15,
+                width: 0,
+                height: 0,
+                borderTopWidth: headSize * 0.35,
+                borderBottomWidth: headSize * 0.35,
+                borderLeftWidth: headSize * 0.55,
+                borderTopColor: 'transparent',
+                borderBottomColor: 'transparent',
+                borderLeftColor: color,
+                shadowColor: color,
+                shadowOpacity: 0.9,
+                shadowRadius: 8,
+              }}
+            />
+          </View>
+        )}
       </>
     );
   };
 
+  const backgroundEl = useMemo(() => <FuturisticDesertBackground />, [gameW, gameH, stars]);
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#100818' }}>
-      <FuturisticDesertBackground />
+    <View style={{ flex: 1, backgroundColor: '#100818' }} onLayout={onGameLayout}>
+      {backgroundEl}
       <View style={containerStyle}>
         {phase === "TUTORIAL" && (
             <TutorialModal 
@@ -615,11 +801,17 @@ export default function SlingshotGame({ onBack }) {
           <Text style={{ color: '#fff', fontWeight: 'bold' }}>Seviye {level}</Text>
         </View>
         
-        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+        <View
+          ref={panAreaRef}
+          collapsable={false}
+          onLayout={measurePanAreaInWindow}
+          style={{ flex: 1, ...(Platform.OS === 'web' ? { touchAction: 'none' } : {}) }}
+          {...panResponder.panHandlers}
+        >
           {/* Kovalar */}
           {BINS.map((bin, i) => (
-            <View key={i} style={{ position: 'absolute', left: bin.x - 35, top: bin.y - 35 }}>
-              <Bin3D type={bin.type} style={{ width: 70, height: 70 }} />
+            <View key={i} style={{ position: 'absolute', left: bin.x - BIN_SIZE / 2, top: bin.y - BIN_SIZE / 2 }}>
+              <Bin3D type={bin.type} style={{ width: BIN_SIZE, height: BIN_SIZE }} />
             </View>
           ))}
 

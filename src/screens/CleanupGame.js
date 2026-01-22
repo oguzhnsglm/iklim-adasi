@@ -119,7 +119,7 @@ export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
   };
 
   if (showForest) {
-    return <ForestScreen onBack={() => setShowForest(false)} />;
+    return <ForestScreen totalScore={0} onBack={() => setShowForest(false)} />;
   }
 
   if (showAchievements) {

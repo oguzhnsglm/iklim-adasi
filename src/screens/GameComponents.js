@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions, Animated, Easing, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import soundManager from '../utils/sounds';
 import { useThemeProgress } from "../ThemeProgressContext";
@@ -281,30 +282,51 @@ export const TutorialModal = ({ title, instructions, onStart }) => (
 );
 
 // HUD (Skor Tablosu)
-export const GameHUD = ({ score, time, lives, onBack }) => (
-  <View style={styles.hudBar}>
-    <View style={{ flex: 1, flexDirection: 'row', gap: 10 }}>
-      <TouchableOpacity style={[styles.glassPanel, styles.backButton]} onPress={onBack}>
-        <Text style={styles.backIcon}>←</Text>
-        <Text style={styles.backText}>Geri</Text>
-      </TouchableOpacity>
+export const GameHUD = ({ score, time, lives, onBack }) => {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+
+  // Küçük genişliklerde (özellikle bazı landscape cihazlarda) HUD taşmasın
+  const compact = width < 780;
+  const panelStyle = [styles.glassPanel, compact && styles.glassPanelCompact];
+  const hudIconStyle = [styles.hudIcon, compact && styles.hudIconCompact];
+  const hudTextStyle = [styles.hudText, compact && styles.hudTextCompact];
+
+  return (
+    <View
+      style={[
+        styles.hudBar,
+        {
+          paddingTop: Math.max(insets.top + 10, Platform.OS === 'android' ? 22 : 14),
+          paddingLeft: 12 + insets.left,
+          paddingRight: 12 + insets.right,
+        },
+      ]}
+    >
+      <View style={styles.hudLeft}>
+        <TouchableOpacity style={[panelStyle, styles.backButton]} onPress={onBack}>
+          <Text style={styles.backIcon}>←</Text>
+          <Text style={styles.backText}>Geri</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.hudRight, compact && styles.hudRightCompact]}>
+        <View style={panelStyle}>
+          <Text style={hudIconStyle}>⭐</Text>
+          <Text style={hudTextStyle}>{score}</Text>
+        </View>
+        <View style={panelStyle}>
+          <Text style={hudIconStyle}>⏱️</Text>
+          <Text style={hudTextStyle}>{Math.ceil(time)}</Text>
+        </View>
+        <View style={panelStyle}>
+          <Text style={hudIconStyle}>❤️</Text>
+          <Text style={hudTextStyle}>{lives}</Text>
+        </View>
+      </View>
     </View>
-    <View style={{ flexDirection: 'row', gap: 10 }}>
-      <View style={styles.glassPanel}>
-        <Text style={styles.hudIcon}>⭐</Text>
-        <Text style={styles.hudText}>{score}</Text>
-      </View>
-      <View style={styles.glassPanel}>
-        <Text style={styles.hudIcon}>⏱️</Text>
-        <Text style={styles.hudText}>{Math.ceil(time)}</Text>
-      </View>
-      <View style={styles.glassPanel}>
-        <Text style={styles.hudIcon}>❤️</Text>
-        <Text style={styles.hudText}>{lives}</Text>
-      </View>
-    </View>
-  </View>
-);
+  );
+};
 
 // Game Over Modal
 export const GameOverModal = ({ score, onRestart, onMenu }) => {
@@ -368,8 +390,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 15,
-    paddingTop: Platform.OS === 'android' ? 50 : 40,
     zIndex: 100,
+  },
+  hudLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  hudRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexShrink: 1,
+    gap: 10,
+  },
+  hudRightCompact: {
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   glassPanel: {
     flexDirection: 'row',
@@ -381,9 +419,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
     gap: 8,
+    flexShrink: 1,
+  },
+  glassPanelCompact: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    gap: 6,
   },
   hudIcon: { fontSize: 20, color: '#fff' },
+  hudIconCompact: { fontSize: 18 },
   hudText: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
+  hudTextCompact: { fontSize: 16 },
   backButton: {
     backgroundColor: 'rgba(255, 100, 100, 0.3)',
     borderColor: 'rgba(255, 100, 100, 0.5)',

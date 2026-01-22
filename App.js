@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { SafeAreaView, StatusBar, StyleSheet, View } from "react-native";
 import CleanupGame from "./src/screens/CleanupGame";
 import { THEME } from "./src/theme";
@@ -6,10 +6,14 @@ import { ThemeProgressProvider } from "./src/ThemeProgressContext";
 import { ThemeWorldsProgressProvider } from "./src/ThemeWorldsProgressContext";
 import { ParentSettingsProvider, useParentSettings } from "./src/ParentSettingsContext";
 import { MascotProvider } from "./src/context/MascotContext";
+import { TreePlantingProvider } from "./src/TreePlantingContext";
+import { UserProgressProvider } from "./src/UserProgressContext";
+import { SplashScreenWithTreePlanting } from "./src/screens/SplashScreenWithTreePlanting";
 
 function AppInner() {
   const sessionStartRef = useRef(null);
   const { ensureCanPlayOrAlert, recordSessionMinutes } = useParentSettings();
+  const [showSplash, setShowSplash] = useState(true);
 
   const handleSessionStart = () => {
     if (!ensureCanPlayOrAlert()) return false;
@@ -27,6 +31,19 @@ function AppInner() {
       sessionStartRef.current = null;
     }
   };
+
+  const handleStartGame = () => {
+    setShowSplash(false);
+  };
+
+  if (showSplash) {
+    return (
+      <SplashScreenWithTreePlanting 
+        onStartGame={handleStartGame}
+        onClose={handleStartGame}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -47,7 +64,11 @@ export default function App() {
       <ThemeWorldsProgressProvider>
         <ParentSettingsProvider>
           <MascotProvider>
-            <AppInner />
+            <TreePlantingProvider>
+              <UserProgressProvider>
+                <AppInner />
+              </UserProgressProvider>
+            </TreePlantingProvider>
           </MascotProvider>
         </ParentSettingsProvider>
       </ThemeWorldsProgressProvider>

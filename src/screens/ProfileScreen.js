@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import KeyboardScrollView from '../components/KeyboardScrollView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { THEME } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const BADGES = [
   { id: 'tree_1', icon: '🌱', title: 'İlk Adım', requirement: 1 },
@@ -52,9 +53,13 @@ export default function ProfileScreen({ onBack }) {
   const [currentLevel, setCurrentLevel] = useState(LEVELS[0]);
   const [nextLevel, setNextLevel] = useState(LEVELS[1]);
   const [levelProgress, setLevelProgress] = useState(0);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [treesData, setTreesData] = useState([]);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     loadProfile();
+    checkUser();
   }, []);
 
   const loadProfile = async () => {
@@ -67,6 +72,17 @@ export default function ProfileScreen({ onBack }) {
       if (score) {
         currentScore = parseInt(score);
         setTotalScore(currentScore);
+      }
+
+      // Ağaçları yükle
+      if (forestData) {
+        try {
+          const data = JSON.parse(forestData);
+          setTotalTrees(data.trees?.length || 0);
+          setTreesData(data.trees || []);
+        } catch (e) {
+          console.log('Forest data parse error:', e);
+        }
       }
 
       // Seviye hesapla
@@ -107,6 +123,40 @@ export default function ProfileScreen({ onBack }) {
     }
   };
 
+  const checkUser = async () => {
+    try {
+      const user = await AsyncStorage.getItem("currentUser");
+      if (user) {
+        setCurrentUser(JSON.parse(user));
+      }
+    } catch (error) {
+      console.log("User check error:", error);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Çıkış Yap",
+      `${currentUser?.email} hesabından çıkış yapmak istiyor musun?`,
+      [
+        { text: "İptal", style: "cancel" },
+        {
+          text: "Evet, Çıkış Yap",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem("currentUser");
+              setCurrentUser(null);
+              Alert.alert("Başarılı", "Hesaptan çıkış yapıldı");
+            } catch (error) {
+              Alert.alert("Hata", "Çıkış yapılırken hata oluştu");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const earnedBadgesList = BADGES.filter(b => earnedBadges.includes(b.id));
 
   return (
@@ -117,13 +167,44 @@ export default function ProfileScreen({ onBack }) {
           <Text style={styles.backText}>← Geri</Text>
         </TouchableOpacity>
         <Text style={styles.title}>👤 PROFİLİM</Text>
-        <View style={styles.placeholder} />
+        {currentUser && (
+          <TouchableOpacity 
+            style={styles.logoutBtn} 
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutBtnText}>🚪</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardScrollView 
         style={styles.scrollView} 
         contentContainerStyle={styles.content}
       >
+        {/* Login / User Info Section */}
+        {!currentUser ? (
+          <View style={styles.authBox}>
+            <Text style={styles.authBoxTitle}>🔐 Giriş Yap</Text>
+            <Text style={styles.authBoxSubtitle}>
+              İlerlemenizi kaydetmek için giriş yapınız
+            </Text>
+            <TouchableOpacity 
+              style={styles.authButton}
+              onPress={() => {
+                // App'e geri dönüp splash'te giriş yap
+                onBack?.();
+              }}
+            >
+              <Text style={styles.authButtonText}>Giriş Yapın / Kaydolun</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.userInfoBox}>
+            <Text style={styles.userInfoTitle}>👤 Hesap Bilgileri</Text>
+            <Text style={styles.userEmail}>{currentUser.email}</Text>
+          </View>
+        )}
+
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={[styles.avatar, { borderColor: currentLevel.color }]}>
@@ -223,6 +304,39 @@ export default function ProfileScreen({ onBack }) {
           )}
         </View>
 
+        {/* Ağaçlar Bölümü */}
+        {totalTrees > 0 && (
+          <View style={styles.treesSection}>
+            <View style={styles.treesSectionHeader}>
+              <Text style={styles.sectionTitle}>🌳 Dikilmiş Ağaçlarım ({totalTrees})</Text>
+            </View>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.treesScrollView}
+              contentContainerStyle={styles.treesContainer}
+            >
+              {treesData.map((tree, index) => (
+                <View key={index} style={styles.treeCard}>
+                  <Text style={styles.treeEmoji}>🌳</Text>
+                  <Text style={styles.treeNumber}>#{index + 1}</Text>
+                  <LinearGradient
+                    colors={['#4CAF50', '#2E7D32']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.treeCardBg}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            
+            <Text style={styles.treeContribution}>
+              🌍 {totalTrees} ağaç = {(totalTrees * 22).toLocaleString('tr-TR')} kg CO₂ emilimi / yıl
+            </Text>
+          </View>
+        )}
+
         {/* Achievements Progress */}
         <View style={styles.progressSection}>
           <Text style={styles.sectionTitle}>📊 İlerleme</Text>
@@ -271,26 +385,221 @@ const styles = StyleSheet.create({
   },
   backText: {
     color: '#fff',
-    fontSize: 16,
     fontWeight: 'bold',
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
   },
   placeholder: {
-    width: 60,
+    width: 40,
   },
-  scrollView: {
+  logoutBtn: {
+    padding: 10,
+    backgroundColor: 'rgba(255,80,80,0.3)',
+    borderRadius: 8,
+  },
+  logoutBtnText: {
+    fontSize: 18,
+  },
+  authBox: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.3)',
+    alignItems: 'center',
+  },
+  authBoxTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  authBoxSubtitle: {
+    fontSize: 13,
+    color: '#ccc',
+    marginBottom: 14,
+    textAlign: 'center',
+  },
+  authButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  authButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  userInfoBox: {
+    backgroundColor: 'rgba(76,175,80,0.2)',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.5)',
+  },
+  userInfoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4CAF50',
+    marginBottom: 8,
+  },
+  userEmail: {
+    fontSize: 13,
+    color: '#fff',
+  },
+  treesSection: {
+    marginVertical: 16,
+    paddingHorizontal: 16,
+  },
+  treesSectionHeader: {
+    marginBottom: 12,
+  },
+  treesScrollView: {
+    marginBottom: 12,
+  },
+  treesContainer: {
+    paddingRight: 16,
+    gap: 10,
+  },
+  treeCard: {
+    width: 80,
+    height: 100,
+    backgroundColor: 'rgba(76,175,80,0.3)',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(76,175,80,0.6)',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  treeCardBg: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: -1,
+  },
+  treeEmoji: {
+    fontSize: 32,
+    marginBottom: 4,
+  },
+  treeNumber: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  treeContribution: {
+    fontSize: 12,
+    color: '#ccc',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  progressSection: {
+    marginVertical: 20,
+    paddingHorizontal: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 15,
+  },
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  badgeBox: {
+    flex: 1,
+    minWidth: '30%',
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.4)',
+  },
+  badgeIcon: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  badgeTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  badgeGray: {
+    opacity: 0.4,
+  },
+  emptyBox: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 30,
+    paddingHorizontal: 16,
+  },
+  emptyIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 6,
+  },
+  emptyDesc: {
+    fontSize: 12,
+    color: '#a5d6a7',
+    textAlign: 'center',
+  },
+  progressItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  progressIcon: {
+    fontSize: 28,
+    marginRight: 12,
+    minWidth: 40,
+    textAlign: 'center',
+  },
+  progressInfo: {
     flex: 1,
   },
-  content: {
-    padding: 20,
-    gap: 20,
+  progressTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 6,
+  },
+  progressBarSmall: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 3,
+  },
+  progressFillSmall: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+  },
+  progressText: {
+    fontSize: 11,
+    color: '#a5d6a7',
   },
   profileCard: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
     borderRadius: 20,
     padding: 30,
     alignItems: 'center',
@@ -313,121 +622,251 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   level: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#a5d6a7',
-    marginBottom: 15,
+    marginBottom: 16,
   },
   levelProgressContainer: {
     width: '100%',
     marginTop: 10,
   },
   levelProgressBar: {
-    height: 14,
+    width: '100%',
+    height: 8,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 7,
+    borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
   levelProgressFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
-    borderRadius: 7,
   },
   levelProgressInfo: {
     alignItems: 'center',
   },
   levelProgressText: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 11,
     color: '#fff',
-    marginBottom: 3,
-  },
-  nextLevelText: {
-    fontSize: 12,
-    color: '#ffd700',
     fontWeight: '600',
   },
-  maxLevelText: {
-    fontSize: 13,
-    color: '#ffd700',
-    fontWeight: 'bold',
+  nextLevelText: {
+    fontSize: 10,
+    color: '#a5d6a7',
+    marginTop: 4,
   },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
+    marginTop: 16,
+    width: '100%',
   },
   statCard: {
     flex: 1,
-    minWidth: '45%',
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
+    padding: 12,
     alignItems: 'center',
   },
-  statIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
   statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  statLabel: {
+    fontSize: 10,
+    color: '#a5d6a7',
+    marginTop: 4,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    paddingVertical: 16,
+    paddingBottom: 40,
+  },
+  badgesSection: {
+    marginVertical: 20,
+    paddingHorizontal: 16,
+  },
+  backBtn: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 8,
+  },
+  backText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  placeholder: {
+    width: 40,
+  },
+  logoutBtn: {
+    padding: 10,
+    backgroundColor: 'rgba(255,80,80,0.3)',
+    borderRadius: 8,
+  },
+  logoutBtnText: {
+    fontSize: 18,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    paddingVertical: 16,
+    paddingBottom: 40,
+  },
+  profileCard: {
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginVertical: 12,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(76, 175, 80, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+    borderWidth: 4,
+    borderColor: '#4CAF50',
+  },
+  avatarIcon: {
+    fontSize: 50,
+  },
+  username: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#a5d6a7',
-  },
-  impactCard: {
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: '#4CAF50',
-  },
-  impactTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  impactDesc: {
+  level: {
     fontSize: 14,
     color: '#a5d6a7',
-    textAlign: 'center',
-    marginBottom: 15,
+    marginBottom: 16,
   },
-  impactBar: {
-    height: 12,
+  levelProgressContainer: {
+    width: '100%',
+    marginTop: 10,
+  },
+  levelProgressBar: {
+    width: '100%',
+    height: 8,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 6,
+    borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  impactFill: {
+  levelProgressFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
   },
-  impactFootnote: {
-    fontSize: 12,
+  levelProgressInfo: {
+    alignItems: 'center',
+  },
+  levelProgressText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  nextLevelText: {
+    fontSize: 10,
     color: '#a5d6a7',
+    marginTop: 4,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    width: '100%',
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  statLabel: {
+    fontSize: 10,
+    color: '#a5d6a7',
+    marginTop: 4,
+  },
+  authBox: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.3)',
+    alignItems: 'center',
+  },
+  authBoxTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  authBoxSubtitle: {
+    fontSize: 13,
+    color: '#ccc',
+    marginBottom: 14,
     textAlign: 'center',
-    fontStyle: 'italic',
+  },
+  authButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  authButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  userInfoBox: {
+    backgroundColor: 'rgba(76,175,80,0.2)',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.5)',
+  },
+  userInfoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4CAF50',
+    marginBottom: 8,
+  },
+  userEmail: {
+    fontSize: 13,
+    color: '#fff',
   },
   badgesSection: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 20,
-    padding: 20,
+    marginVertical: 20,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 15,
@@ -435,65 +874,122 @@ const styles = StyleSheet.create({
   badgesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
   },
-  badgeMini: {
-    width: '30%',
+  badgeBox: {
+    flex: 1,
+    minWidth: '30%',
     backgroundColor: 'rgba(76, 175, 80, 0.2)',
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#4CAF50',
+    borderColor: 'rgba(76, 175, 80, 0.4)',
   },
-  badgeMiniIcon: {
-    fontSize: 32,
-    marginBottom: 5,
+  badgeIcon: {
+    fontSize: 28,
+    marginBottom: 6,
   },
-  badgeMiniTitle: {
-    fontSize: 10,
+  badgeTitle: {
+    fontSize: 11,
+    fontWeight: '600',
     color: '#fff',
     textAlign: 'center',
   },
-  emptyState: {
+  badgeGray: {
+    opacity: 0.4,
+  },
+  emptyBox: {
+    flex: 1,
     alignItems: 'center',
-    padding: 30,
+    paddingVertical: 30,
+    paddingHorizontal: 16,
   },
   emptyIcon: {
-    fontSize: 48,
-    marginBottom: 10,
+    fontSize: 40,
+    marginBottom: 12,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '600',
     color: '#fff',
-    marginBottom: 5,
+    marginBottom: 6,
   },
   emptyDesc: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#a5d6a7',
+    textAlign: 'center',
+  },
+  treesSection: {
+    marginVertical: 16,
+    paddingHorizontal: 16,
+  },
+  treesSectionHeader: {
+    marginBottom: 12,
+  },
+  treesScrollView: {
+    marginBottom: 12,
+  },
+  treesContainer: {
+    paddingRight: 16,
+    gap: 10,
+  },
+  treeCard: {
+    width: 80,
+    height: 100,
+    backgroundColor: 'rgba(76,175,80,0.3)',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(76,175,80,0.6)',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  treeCardBg: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: -1,
+  },
+  treeEmoji: {
+    fontSize: 32,
+    marginBottom: 4,
+  },
+  treeNumber: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  treeContribution: {
+    fontSize: 12,
+    color: '#ccc',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   progressSection: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 20,
-    padding: 20,
+    marginVertical: 20,
+    paddingHorizontal: 16,
   },
   progressItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
-    gap: 12,
+    marginBottom: 16,
+    paddingHorizontal: 8,
   },
   progressIcon: {
-    fontSize: 32,
+    fontSize: 28,
+    marginRight: 12,
+    minWidth: 40,
+    textAlign: 'center',
   },
   progressInfo: {
     flex: 1,
   },
   progressTitle: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '600',
     color: '#fff',
-    fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 6,
   },
   progressBarSmall: {
     height: 6,

@@ -1,0 +1,273 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                     SPLASH SCREEN ARCHITECTURE DIAGRAM                  ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+1. UYGULAMA BAŞLATMA AKIŞI
+═══════════════════════════════════════════════════════════════════════════
+
+    App.js başlar
+         ↓
+    Provider Hierarchy:
+    ├── ThemeProgressProvider
+    ├── ThemeWorldsProgressProvider
+    ├── ParentSettingsProvider
+    ├── MascotProvider
+    └── TreePlantingProvider (YENİ)
+         ↓
+    AppInner component
+    ├─ showSplash = true?
+    │   YES → SplashScreenWithTreePlanting göster
+    │   NO  → Main Game App (CleanupGame)
+    ↓
+    Kullanıcı "OYUNA BAŞLA" basarsa
+         ↓
+    setShowSplash(false)
+         ↓
+    Main App yüklenir
+
+
+2. SPLASH SCREEN BILEŞEN YAPISI
+═══════════════════════════════════════════════════════════════════════════
+
+    SplashScreenWithTreePlanting
+    │
+    ├── SafeAreaView
+    │   ├── LinearGradient (Arka Plan)
+    │   │   └── colors: ["#E8F5E9", "#C8E6C9", "#A5D6A7"]
+    │   │
+    │   ├── FloatingDecorations (Dekoratif Elemanlar)
+    │   │   ├── 🍃 (Yaprak) - Üst sağ
+    │   │   ├── 🌼 (Çiçek) - Alt sol
+    │   │   └── 🐦 (Kuş) - Alt sağ
+    │   │
+    │   ├── Animated.View (Ana İçerik)
+    │   │   ├── Header Section
+    │   │   │   ├── Logo (🌍 + ♻️)
+    │   │   │   ├── Title: "Doğayı Koru"
+    │   │   │   ├── Subtitle: "Oyna, öğren, dünyayı iyileştir"
+    │   │   │   └── Dekoratif Çizgi
+    │   │   │
+    │   │   ├── TreePlantingCard (YENİ)
+    │   │   │   ├── Glassmorphism Kart
+    │   │   │   ├── Ağaç Emoji (🌍→🌱→🌿→🌳)
+    │   │   │   ├── Başlık: "🌱 Ağaç Dik"
+    │   │   │   ├── Subtitle: "Doğayı iyileştir, X ağaç diktin"
+    │   │   │   ├── CTA: "Dokunarak başla"
+    │   │   │   └── Glow Efekti
+    │   │   │
+    │   │   ├── Play Button
+    │   │   │   ├── 🎮 + "OYUNA BAŞLA"
+    │   │   │   ├── Glassmorphism Stil
+    │   │   │   ├── Glow Arka Plan
+    │   │   │   └── Tap Animation
+    │   │   │
+    │   │   └── Bottom Info
+    │   │       ├── "Her oyun oynayarak doğayı kurtarabilirsin ✨"
+    │   │       └── "🌳 Bugün dikildi: X ağaç"
+    │   │
+    │   └── Close Button (Köşede)
+    │       └── ✕
+
+
+3. AĞAÇ DIKME İŞ AKIŞI
+═══════════════════════════════════════════════════════════════════════════
+
+    Kullanıcı TreePlantingCard'a dokunur
+         ↓
+    animateTreeGrowth() çalışır
+         ↓
+    plantTree() çağrılır (TreePlantingContext)
+         ↓
+    Yeni Ağaç Objesi Oluşturulur
+    {
+      id: "1234567890",
+      stage: 0,
+      emoji: "🌱",
+      name: "Ağaç #1"
+    }
+         ↓
+    4 Aşamalı Animasyon Başlar
+    
+    Aşama 0: 🌍 (Toprak)
+    ├── Duration: 400ms
+    ├── Glow Effect: ON
+    └── Wait: 600ms
+         ↓
+    Aşama 1: 🌱 (Filiz)
+    ├── Duration: 400ms
+    ├── Glow Effect: ON
+    └── Wait: 600ms
+         ↓
+    Aşama 2: 🌿 (Fidan)
+    ├── Duration: 400ms
+    ├── Glow Effect: ON
+    └── Wait: 600ms
+         ↓
+    Aşama 3: 🌳 (Ağaç)
+    ├── Duration: 400ms
+    ├── Glow Effect: ON
+    └── Tamamlandı!
+         ↓
+    updateTreeStage() ile durum güncellenir
+         ↓
+    AsyncStorage'a kaydedilir
+         ↓
+    Ağaç Sayısı Artırılır (+1)
+         ↓
+    Bottom Info güncellenir
+    "🌳 Bugün dikildi: X ağaç"
+
+
+4. STATE MANAGEMENT - TreePlantingContext
+═══════════════════════════════════════════════════════════════════════════
+
+    TreePlantingContext
+    │
+    ├── State:
+    │   ├── trees: Tree[] (tüm ağaçlar)
+    │   ├── totalTreesPlanted: number
+    │   └── loading: boolean
+    │
+    ├── Functions:
+    │   ├── plantTree(data) → Tree | null
+    │   │   └── AsyncStorage'a kaydeder
+    │   │
+    │   ├── updateTreeStage(treeId, stage) → void
+    │   │   └── Ağaç aşamasını günceller
+    │   │
+    │   ├── clearAllTrees() → void
+    │   │   └── Tüm ağaçları siler
+    │   │
+    │   └── getLastPlantedTree() → Tree | null
+    │       └── Son dikilen ağacı döndürür
+    │
+    └── AsyncStorage:
+        └── KEY: "treePlantingData"
+            └── Data: JSON.stringify(trees)
+
+
+5. ANIMASYON TIMELINE
+═══════════════════════════════════════════════════════════════════════════
+
+    T=0ms
+    │
+    ├─ fadeInAnim: 0 → 1 (800ms) ↓
+    ├─ slideUpAnim: 50 → 0 (800ms) ↓
+    ├─ scaleAnim: 0.95 → 1 (800ms) ↓
+    │
+    T=400ms
+    ├─ cardSlideAnim: 100 → 0 (600ms) ↓
+    │
+    T=1000ms
+    │ (Tüm animasyonlar tamamlandı)
+    │ Splash screen tamamen görülebilir
+    │
+    (Kullanıcı OYUNA BAŞLA'ya basarsa)
+    │
+    T=1000ms+
+    ├─ fadeInAnim: 1 → 0 (400ms) ↓
+    ├─ slideUpAnim: 0 → 50 (400ms) ↓
+    │
+    T=1400ms
+    │ Splash kapatılıp Main App yüklenir
+
+
+6. COLOR PALETTE HIYERARŞISI
+═══════════════════════════════════════════════════════════════════════════
+
+    MODERN_THEME
+    │
+    ├── backgrounds
+    │   ├── primary: "#F0F7F4"     (Çok açık yeşil)
+    │   ├── secondary: "#E8F3F0"   (Hafif mavi-yeşil)
+    │   └── tertiary: "#E0ECED"    (Gri-yeşil)
+    │
+    ├── glass (Glassmorphism)
+    │   ├── light: rgba(255,255,255,0.2)
+    │   ├── medium: rgba(255,255,255,0.25) ← MAIN
+    │   ├── dark: rgba(255,255,255,0.15)
+    │   └── darkOverlay: rgba(0,0,0,0.08)
+    │
+    ├── gradients
+    │   ├── forest: ["#1B5E20", "#2E7D32", "#4CAF50"]
+    │   ├── nature: ["#27AE60", "#1B5E20", "#0D3D0D"]
+    │   ├── sunrise: ["#FDB750", "#F7CE68", "#1B5E20"]
+    │   └── soft: ["#E8F5E9", "#C8E6C9", "#A5D6A7"] ← SPLASH USES THIS
+    │
+    ├── accents (iOS 26)
+    │   ├── primary: "#34C759"     (iOS yeşil) ← MAIN
+    │   ├── secondary: "#30B0C0"   (Mavi-yeşil)
+    │   └── tertiary: "#AF52DE"    (Mor)
+    │
+    ├── text
+    │   ├── primary: "#0D3D0D"     (Çok koyu yeşil)
+    │   ├── secondary: "#1B5E20"   (Koyu yeşil)
+    │   ├── tertiary: "#4CAF50"    (Açık yeşil)
+    │   ├── light: "#F1F8E9"       (Açık)
+    │   └── inverse: "#FFFFFF"     (Beyaz)
+    │
+    └── effects
+        ├── softGlow: rgba(76,175,80,0.15)
+        ├── strongGlow: rgba(76,175,80,0.25)
+        ├── shadowLight: rgba(0,0,0,0.05)
+        ├── shadowMedium: rgba(0,0,0,0.1)
+        └── shadowStrong: rgba(0,0,0,0.15)
+
+
+7. VERİ FLOW DIYAGRAMI
+═══════════════════════════════════════════════════════════════════════════
+
+    User Input
+         │
+         ├─ Tap on TreePlantingCard
+         │   ├─ soundManager.play("tap")
+         │   ├─ plantTree({ emoji: "🌱", name: "Ağaç #X" })
+         │   │   └─ TreePlantingContext
+         │   │       ├─ createNewTree()
+         │   │       ├─ AsyncStorage.setItem()
+         │   │       └─ setTotalTreesPlanted(+1)
+         │   │
+         │   └─ animateTreeGrowth()
+         │       ├─ for (stage = 0 to 3)
+         │       │   ├─ updateTreeStage(treeId, stage)
+         │       │   ├─ setCurrentStage(stage)
+         │       │   └─ glowAnimation()
+         │       └─ onTreePlanted()
+         │
+         └─ Tap on Play Button
+             ├─ buttonScaleAnim()
+             ├─ fadeOutAnimation()
+             └─ onStartGame() → setShowSplash(false)
+
+
+8. FİLE DEPENDENCY GRAPH
+═══════════════════════════════════════════════════════════════════════════
+
+    App.js
+    ├── imports TreePlantingProvider
+    ├── imports SplashScreenWithTreePlanting
+    │
+    └── SplashScreenWithTreePlanting.js
+        ├── imports TreePlantingCard
+        ├── imports useTreePlanting hook
+        ├── imports MODERN_THEME from theme.js
+        ├── imports LinearGradient
+        └── imports BlurView
+            │
+            ├── TreePlantingCard.js
+            │   ├── imports useTreePlanting hook
+            │   ├── imports soundManager
+            │   └── imports MODERN_THEME
+            │       │
+            │       └── theme.js
+            │           └── exports MODERN_THEME
+            │
+            └── TreePlantingContext.js
+                ├── exports useTreePlanting
+                ├── exports TreePlantingProvider
+                └── imports AsyncStorage
+
+═══════════════════════════════════════════════════════════════════════════
+
+Bu diyagram tüm systemi göstermektedir.
+Daha detaylı bilgi için SPLASH_SCREEN_DOCS.md dosyasını kontrol edin.

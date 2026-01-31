@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { THEME } from '../theme';
 import { useThemeProgress } from '../ThemeProgressContext';
 import MascotBanner from '../components/MascotBanner';
+import soundManager from '../utils/sounds';
 
 const COLORS = {
   bgDeep: "#01579B",
@@ -92,6 +93,7 @@ const THEME_TASKS = {
 };
 
 export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
+  const [soundOn, setSoundOn] = useState(true);
   const [gameMode, setGameMode] = useState("SELECTION");
   const [showForest, setShowForest] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
@@ -100,6 +102,16 @@ export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
   const [showThemeWorlds, setShowThemeWorlds] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const { activeTheme } = useThemeProgress();
+
+  useEffect(() => {
+    soundManager.init?.();
+    return () => soundManager.stopBackgroundMusic?.();
+  }, []);
+
+  useEffect(() => {
+    soundManager.setEnabled?.(soundOn);
+    soundManager.setMusicEnabled?.(soundOn);
+  }, [soundOn]);
 
   const handleEnterGame = (mode) => {
     if (mode === "SELECTION") {
@@ -182,6 +194,8 @@ export default function CleanupGame({ onRequestSessionStart, onSessionEnd }) {
         onShowProfile={() => setShowProfile(true)}
         onShowParentMode={() => setShowParentMode(true)}
         onOpenThemeWorlds={() => setShowThemeWorlds(true)}
+        soundOn={soundOn}
+        onToggleSound={() => setSoundOn((s) => !s)}
         darkMode={darkMode}
         onToggleDark={() => setDarkMode((v) => !v)}
       />
@@ -196,9 +210,12 @@ function ModeSelectionScreen({
   onShowProfile,
   onShowParentMode,
   onOpenThemeWorlds,
+  soundOn,
+  onToggleSound,
   darkMode,
   onToggleDark,
 }) {
+  const setSoundOn = () => onToggleSound?.();
   const { themes, activeTheme, setActiveTheme } = useThemeProgress();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
@@ -399,6 +416,10 @@ function ModeSelectionScreen({
           </TouchableOpacity>
           <Text style={styles.logoText}>DOĞAYI KORU</Text>
           <View style={styles.headerRight}>
+            {/* MUSIC TOGGLE (immediately next to Profile) */}
+            <TouchableOpacity style={styles.musicToggleButton} onPress={onToggleSound}>
+              <Text style={styles.musicToggleText}>{soundOn ? '🔊' : '🔇'}</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={onShowProfile}>
               <Text style={styles.headerIcon}>👤</Text>
             </TouchableOpacity>
@@ -752,6 +773,20 @@ const styles = StyleSheet.create({
   },
   headerIcon: {
     fontSize: 22,
+  },
+  musicToggleButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  musicToggleText: {
+    color: '#ffffff',
+    fontWeight: '800',
   },
   factInlineContainer: {
     marginTop: 8,
